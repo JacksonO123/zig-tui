@@ -23,8 +23,8 @@ pub fn render(
     while (i < size.col - 2) : (i += 1) {
         try writer.writeByte('-');
     }
-    try writer.writeByte('>');
-    try writer.writeAll("\n[ ]\x1b[2G");
+    try sequences.writeAscii(context, ">\n[ ]", writer);
+    try sequences.setCursorCol(2, writer);
     try writer.flush();
 
     i = 0;
@@ -32,9 +32,7 @@ pub fn render(
         std.Thread.sleep(100 * std.time.ns_per_ms);
         try sequences.setCursorPos(context, 1, i + 2, writer);
         try writer.writeByte('=');
-        try writer.flush();
         try sequences.setCursorPos(context, 2, 2, writer);
-        try writer.flush();
     }
 
     try writer.writeByte('\n');

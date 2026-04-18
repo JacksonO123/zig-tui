@@ -6,13 +6,13 @@ const RenderContext = contextMod.RenderContext;
 const Codes = struct {
     const Str = []const u8;
 
-    setCursorRowAbsolute: Str,
+    setCursorColAbsolute: Str,
     moveCursorUp: Str,
     moveCursorDown: Str,
 };
 
 pub const codes: Codes = .{
-    .setCursorRowAbsolute = "\x1b[{d}G",
+    .setCursorColAbsolute = "\x1b[{d}G",
     .moveCursorUp = "\x1b[{d}A",
     .moveCursorDown = "\x1b[{d}B",
 };
@@ -24,9 +24,26 @@ pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writ
     } else {
         try writer.print(codes.moveCursorDown, .{rowDiff});
     }
-    try writer.flush();
-    try writer.print(codes.setCursorRowAbsolute, .{col});
+    try writer.print(codes.setCursorColAbsolute, .{col});
     try writer.flush();
 
     context.rowOffset = row;
+}
+
+pub fn writeAscii(context: *RenderContext, ascii: []const u8, writer: *Writer) !void {
+    var rowChange: i32 = 0;
+    for (ascii) |char| {
+        if (char == '\n') {
+            rowChange += 1;
+        }
+    }
+
+    context.rowOffset += rowChange;
+
+    try writer.writeAll(ascii);
+}
+
+pub fn setCursorCol(col: usize, writer: *Writer) !void {
+    try writer.print(codes.setCursorColAbsolute, .{col});
+    try writer.flush();
 }
