@@ -27,14 +27,14 @@ pub fn render(
     try sequences.setCursorCol(2, writer);
     try writer.flush();
 
-    i = 0;
-    while (i < size.col - 2) : (i += 1) {
-        std.Thread.sleep(100 * std.time.ns_per_ms);
-        try sequences.setCursorPos(context, 1, i + 2, writer);
-        try writer.writeByte('=');
-        try sequences.setCursorPos(context, 2, 2, writer);
-    }
+    // i = 0;
+    // while (i < size.col - 2) : (i += 1) {
+    //     std.Thread.sleep(100 * std.time.ns_per_ms);
+    //     try sequences.setCursorPos(context, 1, i + 2, writer);
+    //     try writer.writeByte('=');
+    //     try sequences.setCursorPos(context, 2, 2, writer);
+    // }
 
-    try writer.writeByte('\n');
-    try writer.flush();
+    // try writer.writeByte('\n');
+    // try writer.flush();
 }

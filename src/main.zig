@@ -1,4 +1,7 @@
 const std = @import("std");
+const c = @cImport({
+    @cInclude("errno.h");
+});
 
 const zig_tui = @import("zig_tui");
 
@@ -18,8 +21,8 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var buf: [1024]u8 = undefined;
-    var stdout = std.fs.File.stdout().writer(&buf);
+    var stdoutBuf: [1024]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&stdoutBuf);
     const writer = &stdout.interface;
 
     var act: std.posix.Sigaction = .{
@@ -36,15 +39,21 @@ pub fn main() !void {
     try renderer.render(allocator, &renderContext, size, writer);
     try writer.flush();
 
-    // while (true) {
-    //     // if (is_resized.load(.seq_cst)) {
-    //     //     is_resized.store(false, .seq_cst);
+    var stdinBuf: [1024]u8 = undefined;
+    var stdin = std.fs.File.stdin().reader(&stdinBuf);
+    const stdinReader = &stdin.interface;
 
-    //     //     size = try utils.getWinSize();
+    while (true) {
+        if (is_resized.swap(false, .monotonic)) {
+            std.debug.print("RESIZED\n", .{});
+        }
 
-    //     //     try renderer.render(size, writer);
-    //     // }
-
-    //     std.Thread.sleep(100 * std.time.ns_per_ms);
-    // }
+        _ = stdinReader.takeByte() catch |err| {
+            if (err == error.Interrupted) {
+                std.debug.print("INTERRUPTED\n", .{});
+                continue;
+            }
+            return err;
+        };
+    }
 }
