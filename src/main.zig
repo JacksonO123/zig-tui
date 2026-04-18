@@ -6,6 +6,8 @@ const context = @import("context.zig");
 const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
 const utils = @import("utils.zig");
+const app = @import("app.zig");
+const terminalMod = @import("terminal.zig");
 
 const c = @cImport({
     @cInclude("signal.h");
@@ -22,7 +24,6 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    _ = allocator;
 
     var stdoutBuf: [1024]u8 = undefined;
     var stdout = std.fs.File.stdout().writer(&stdoutBuf);
@@ -41,11 +42,13 @@ pub fn main() !void {
 
     const waitMask = std.posix.sigemptyset();
 
-    var renderContext: context.RenderContext = .{};
-
     try sequences.disableAutoWrap(writer);
 
     var size = try utils.getWinSize();
+    var terminal = terminalMod.Terminal.init(allocator);
+    var renderContext = context.RenderContext.init(&terminal);
+
+    try app.renderUI(&terminal, size);
     try renderer.render(&renderContext, size, writer);
 
     while (true) {

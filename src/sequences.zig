@@ -12,6 +12,7 @@ const Codes = struct {
     eraseDisplayAfterCursor: Str,
     disableAutoWrap: Str,
     enableAutoWrap: Str,
+    clearScreen: Str,
 };
 
 pub const codes: Codes = .{
@@ -21,13 +22,14 @@ pub const codes: Codes = .{
     .eraseDisplayAfterCursor = "\x1b[0J",
     .disableAutoWrap = "\x1b[?7l",
     .enableAutoWrap = "\x1b[?7h",
+    .clearScreen = "\x1b[2J",
 };
 
 pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writer) !void {
     const rowDiff = row - context.rowOffset;
     if (rowDiff < 0) {
         try writer.print(codes.moveCursorUp, .{rowDiff * -1});
-    } else {
+    } else if (rowDiff != 0) {
         try writer.print(codes.moveCursorDown, .{rowDiff});
     }
     try writer.print(codes.setCursorColAbsolute, .{col});
@@ -62,4 +64,8 @@ pub fn disableAutoWrap(writer: *Writer) !void {
 
 pub fn enableAutoWrap(writer: *Writer) !void {
     try writer.writeAll(codes.enableAutoWrap);
+}
+
+pub fn clearScreen(writer: *Writer) !void {
+    try writer.writeAll(codes.clearScreen);
 }
