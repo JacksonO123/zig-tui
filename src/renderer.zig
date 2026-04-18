@@ -7,24 +7,8 @@ const RenderContext = contextMod.RenderContext;
 const sequences = @import("sequences.zig");
 const utils = @import("utils.zig");
 
-pub fn render(
-    childAllocator: Allocator,
-    context: *RenderContext,
-    size: utils.WinSize,
-    writer: *Writer,
-) !void {
-    var arena = std.heap.ArenaAllocator.init(childAllocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    _ = allocator;
-
-    try writer.writeByte('<');
-    var i: usize = 0;
-    while (i < size.col - 2) : (i += 1) {
-        try writer.writeByte('-');
-    }
-    try sequences.writeAscii(context, ">\n[ ]", writer);
-    try sequences.setCursorCol(2, writer);
+pub fn render(context: *RenderContext, size: utils.WinSize, writer: *Writer) !void {
+    try renderUI(context, size, writer);
     try writer.flush();
 
     // i = 0;
@@ -37,4 +21,17 @@ pub fn render(
 
     // try writer.writeByte('\n');
     // try writer.flush();
+}
+
+fn renderUI(context: *RenderContext, size: utils.WinSize, writer: *Writer) !void {
+    try sequences.setCursorPos(context, 1, 1, writer);
+    try sequences.eraseDisplayAfterCursor(writer);
+
+    try writer.writeByte('<');
+    var i: usize = 0;
+    while (i < size.col - 2) : (i += 1) {
+        try writer.writeByte('-');
+    }
+    try sequences.writeAscii(context, ">\n[ ]", writer);
+    try sequences.setCursorCol(2, writer);
 }

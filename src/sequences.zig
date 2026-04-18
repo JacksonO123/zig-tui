@@ -9,12 +9,18 @@ const Codes = struct {
     setCursorColAbsolute: Str,
     moveCursorUp: Str,
     moveCursorDown: Str,
+    eraseDisplayAfterCursor: Str,
+    disableAutoWrap: Str,
+    enableAutoWrap: Str,
 };
 
 pub const codes: Codes = .{
     .setCursorColAbsolute = "\x1b[{d}G",
     .moveCursorUp = "\x1b[{d}A",
     .moveCursorDown = "\x1b[{d}B",
+    .eraseDisplayAfterCursor = "\x1b[0J",
+    .disableAutoWrap = "\x1b[?7l",
+    .enableAutoWrap = "\x1b[?7h",
 };
 
 pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writer) !void {
@@ -25,7 +31,6 @@ pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writ
         try writer.print(codes.moveCursorDown, .{rowDiff});
     }
     try writer.print(codes.setCursorColAbsolute, .{col});
-    try writer.flush();
 
     context.rowOffset = row;
 }
@@ -45,5 +50,16 @@ pub fn writeAscii(context: *RenderContext, ascii: []const u8, writer: *Writer) !
 
 pub fn setCursorCol(col: usize, writer: *Writer) !void {
     try writer.print(codes.setCursorColAbsolute, .{col});
-    try writer.flush();
+}
+
+pub fn eraseDisplayAfterCursor(writer: *Writer) !void {
+    try writer.writeAll(codes.eraseDisplayAfterCursor);
+}
+
+pub fn disableAutoWrap(writer: *Writer) !void {
+    try writer.writeAll(codes.disableAutoWrap);
+}
+
+pub fn enableAutoWrap(writer: *Writer) !void {
+    try writer.writeAll(codes.enableAutoWrap);
 }
