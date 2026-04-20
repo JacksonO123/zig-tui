@@ -1,5 +1,6 @@
 const std = @import("std");
 const Writer = std.Io.Writer;
+
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 
@@ -7,6 +8,7 @@ const Codes = struct {
     const Str = []const u8;
 
     setCursorColAbsolute: Str,
+    setCursorPosAbsolute: Str,
     moveCursorUp: Str,
     moveCursorDown: Str,
     eraseDisplayAfterCursor: Str,
@@ -17,6 +19,7 @@ const Codes = struct {
 
 pub const codes: Codes = .{
     .setCursorColAbsolute = "\x1b[{d}G",
+    .setCursorPosAbsolute = "\x1b[{d};{d}H", // row;col
     .moveCursorUp = "\x1b[{d}A",
     .moveCursorDown = "\x1b[{d}B",
     .eraseDisplayAfterCursor = "\x1b[0J",
@@ -68,4 +71,8 @@ pub fn enableAutoWrap(writer: *Writer) !void {
 
 pub fn clearScreen(writer: *Writer) !void {
     try writer.writeAll(codes.clearScreen);
+}
+
+pub fn setCursorPosAbsolute(row: usize, col: usize, writer: *Writer) !void {
+    try writer.print(codes.setCursorPosAbsolute, .{ row, col });
 }
