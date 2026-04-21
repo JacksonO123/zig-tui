@@ -15,8 +15,15 @@ const Codes = struct {
     disableAutoWrap: Str,
     enableAutoWrap: Str,
     clearScreen: Str,
+
     boldText: Str,
-    normalText: Str,
+    disableBoldText: Str,
+
+    underlineText: Str,
+    disableUnderlineText: Str,
+
+    italicText: Str,
+    disableItalicText: Str,
 };
 
 pub const codes: Codes = .{
@@ -28,8 +35,15 @@ pub const codes: Codes = .{
     .disableAutoWrap = "\x1b[?7l",
     .enableAutoWrap = "\x1b[?7h",
     .clearScreen = "\x1b[2J",
+
     .boldText = "\x1b[1m",
-    .normalText = "\x1b[22m",
+    .disableBoldText = "\x1b[22m",
+
+    .underlineText = "\x1b[4m",
+    .disableUnderlineText = "\x1b[24m",
+
+    .italicText = "\x1b[3m",
+    .disableItalicText = "\x1b[23m",
 };
 
 pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writer) !void {
@@ -85,6 +99,22 @@ pub fn boldText(writer: *Writer) !void {
     try writer.writeAll(codes.boldText);
 }
 
-pub fn normalText(writer: *Writer) !void {
-    try writer.writeAll(codes.normalText);
+pub fn disableBoldText(writer: *Writer) !void {
+    try writer.writeAll(codes.disableBoldText);
+}
+
+pub fn underlineText(writer: *Writer) !void {
+    try writer.writeAll(codes.underlineText);
+}
+
+pub fn disableUnderlineText(writer: *Writer) !void {
+    try writer.writeAll(codes.disableUnderlineText);
+}
+
+pub fn italicText(writer: *Writer) !void {
+    try writer.writeAll(codes.italicText);
+}
+
+pub fn disableItalicText(writer: *Writer) !void {
+    try writer.writeAll(codes.disableItalicText);
 }

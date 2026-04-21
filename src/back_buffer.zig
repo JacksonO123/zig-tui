@@ -245,14 +245,41 @@ pub const BackBuffer = struct {
     }
 
     fn matchRenderStyle(self: *Self, styles: stylesMod.SimpleDataStyle, writer: *Writer) !void {
-        if (self.rendering.bold != styles.bold) {
-            if (styles.bold) {
-                try sequences.boldText(writer);
-            } else {
-                try sequences.normalText(writer);
-            }
+        try updateSpecificRenderStyle(
+            &self.rendering.bold,
+            styles.bold,
+            sequences.boldText,
+            sequences.disableBoldText,
+            writer,
+        );
 
-            self.rendering.bold = styles.bold;
-        }
+        try updateSpecificRenderStyle(
+            &self.rendering.underline,
+            styles.underline,
+            sequences.underlineText,
+            sequences.disableUnderlineText,
+            writer,
+        );
+
+        try updateSpecificRenderStyle(
+            &self.rendering.italic,
+            styles.italic,
+            sequences.italicText,
+            sequences.disableItalicText,
+            writer,
+        );
     }
 };
+
+fn updateSpecificRenderStyle(
+    cond1: *bool,
+    cond2: bool,
+    enableFn: fn (*Writer) anyerror!void,
+    disableFn: fn (*Writer) anyerror!void,
+    writer: *Writer,
+) !void {
+    if (cond1.* != cond2) {
+        if (cond2) try enableFn(writer) else try disableFn(writer);
+        cond1.* = cond2;
+    }
+}

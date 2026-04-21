@@ -55,8 +55,8 @@ const BorderStylesVariant = enum {
     }
 };
 
-const BoldVariants = enum {
-    Bold,
+const ActiveState = enum {
+    Active,
     None,
 };
 
@@ -79,44 +79,64 @@ pub const Styles = struct {
             paddingX: u16 = 0,
             paddingY: u16 = 0,
         } = .{},
-        boldState: BoldVariants = .None,
+        boldState: ActiveState = .None,
+        underlineState: ActiveState = .None,
+        italicState: ActiveState = .None,
     } = .{},
 
     pub const default: Self = .{};
 
     pub fn toSimpleStyles(self: Self) SimpleDataStyle {
         return .{
-            .bold = self.styles.boldState == .Bold,
+            .bold = self.styles.boldState == .Active,
+            .underline = self.styles.underlineState == .Active,
+            .italic = self.styles.italicState == .Active,
         };
-    }
-
-    pub fn border(self: *Self, style: BorderStylesVariant) *ElementBorderStyles {
-        self.styles.border.borderVariant = style;
-        return &self.styles.border;
     }
 
     pub fn hasBorder(self: Self) bool {
         return self.styles.border.borderVariant != .None;
     }
 
-    pub fn padding(self: *Self, amount: u16) void {
+    pub fn border(self: *Self, style: BorderStylesVariant) *Self {
+        self.styles.border.borderVariant = style;
+        return self;
+    }
+
+    pub fn padding(self: *Self, amount: u16) *Self {
         self.styles.padding.paddingX = amount;
         self.styles.padding.paddingY = amount;
+        return self;
     }
 
-    pub fn paddingX(self: *Self, amount: u16) void {
+    pub fn paddingX(self: *Self, amount: u16) *Self {
         self.styles.padding.paddingX = amount;
+        return self;
     }
 
-    pub fn paddingY(self: *Self, amount: u16) void {
+    pub fn paddingY(self: *Self, amount: u16) *Self {
         self.styles.padding.paddingY = amount;
+        return self;
     }
 
-    pub fn bold(self: *Self) void {
-        self.styles.boldState = .Bold;
+    pub fn bold(self: *Self) *Self {
+        self.styles.boldState = .Active;
+        return self;
+    }
+
+    pub fn underline(self: *Self) *Self {
+        self.styles.underlineState = .Active;
+        return self;
+    }
+
+    pub fn italic(self: *Self) *Self {
+        self.styles.italicState = .Active;
+        return self;
     }
 };
 
 pub const SimpleDataStyle = struct {
     bold: bool = false,
+    underline: bool = false,
+    italic: bool = false,
 };

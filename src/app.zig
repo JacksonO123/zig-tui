@@ -10,11 +10,10 @@ const utils = @import("utils.zig");
 
 pub fn renderUI(terminal: *terminalMod.Terminal) !ui.UIElement {
     var el = ui.Text.fromConstText("some text\nhere");
-    _ = el.styles.border(.Rounded);
-    _ = el.styles.paddingX(1);
-    _ = el.styles.bold();
+    _ = el.styles.border(.Rounded).paddingX(1).underline().italic();
 
-    const el2 = ui.Text.fromConstText("more text");
+    var el2 = ui.Text.fromConstText("more text");
+    _ = el2.styles.bold();
 
     const layout = try ui.Layout.fromElements(
         terminal.allocator,
