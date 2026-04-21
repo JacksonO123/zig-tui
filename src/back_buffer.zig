@@ -18,9 +18,14 @@ const BufferCharVariants = enum {
     Unicode,
 };
 
-const BufferChar = union(BufferCharVariants) {
+const BufferCharData = union(BufferCharVariants) {
     Char: u8,
     Unicode: []const u8,
+};
+
+const BufferChar = struct {
+    style: stylesMod.SimpleDataStyle = .{},
+    data: BufferCharData,
 };
 
 pub const BackBuffer = struct {
@@ -31,6 +36,7 @@ pub const BackBuffer = struct {
 
     lines: BufferLines,
     pos: BackBufferPos,
+    rendering: stylesMod.SimpleDataStyle = .{},
 
     pub inline fn initFromConfig(
         allocator: Allocator,
@@ -58,7 +64,7 @@ pub const BackBuffer = struct {
     inline fn createLine(allocator: Allocator, size: utils.WinSize) !BackBufferLine {
         var line = try BackBufferLine.initCapacity(allocator, size.col);
         line.items.len = size.col;
-        @memset(line.items, .{ .Char = ' ' });
+        @memset(line.items, .{ .data = .{ .Char = ' ' } });
         return line;
     }
 
@@ -79,6 +85,7 @@ pub const BackBuffer = struct {
         self.renderStylesPreAdjust(element.styles);
 
         const startPos = self.pos;
+        const simpleStyles = element.styles.toSimpleStyles();
 
         switch (element.variant) {
             .Text => |text| {
@@ -90,7 +97,7 @@ pub const BackBuffer = struct {
                         continue;
                     }
 
-                    try self.writeCharAtPos(allocator, size, self.pos, char);
+                    try self.writeCharAtPos(allocator, size, self.pos, char, simpleStyles);
                     self.pos.x += 1;
                     maxWidth = @max(maxWidth, self.pos.x);
                 }
@@ -119,17 +126,18 @@ pub const BackBuffer = struct {
     }
 
     fn renderStylesPreAdjust(self: *Self, styles: stylesMod.Styles) void {
-        if (styles.styles.border != null) {
+        if (styles.hasBorder()) {
             self.pos.x += 1;
             self.pos.y += 1;
         }
+
+        self.pos.x += styles.styles.padding.paddingX;
+        self.pos.y += styles.styles.padding.paddingY;
     }
 
     fn renderStylesPostAdjust(self: *Self, styles: stylesMod.Styles) void {
-        if (styles.styles.border != null) {
-            self.pos.x += 1;
-            self.pos.y += 1;
-        }
+        renderStylesPreAdjust(self, styles);
+        // if this needs different logic, that goes here
     }
 
     fn renderStylesPost(
@@ -142,7 +150,7 @@ pub const BackBuffer = struct {
         self.renderStylesPostAdjust(styles);
 
         var pos = start;
-        if (styles.styles.border) |borderStyles| {
+        if (styles.styles.border.getChars()) |borderStyles| {
             try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.corners.topLeft);
             pos.x = self.pos.x - 1;
             try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.corners.topRight);
@@ -191,13 +199,17 @@ pub const BackBuffer = struct {
         size: utils.WinSize,
         pos: BackBufferPos,
         char: u8,
+        styles: stylesMod.SimpleDataStyle,
     ) !void {
         while (pos.y >= self.lines.items.len) {
             const line = try BackBuffer.createLine(allocator, size);
             try self.lines.append(allocator, line);
         }
 
-        self.lines.items[pos.y].items[pos.x] = .{ .Char = char };
+        self.lines.items[pos.y].items[pos.x] = .{
+            .data = .{ .Char = char },
+            .style = styles,
+        };
     }
 
     fn writeUnicodeAtPos(
@@ -212,27 +224,35 @@ pub const BackBuffer = struct {
             try self.lines.append(allocator, line);
         }
 
-        self.lines.items[pos.y].items[pos.x] = .{ .Unicode = chars };
+        self.lines.items[pos.y].items[pos.x] = .{ .data = .{ .Unicode = chars } };
     }
 
-    pub fn writeToWriter(self: Self, writer: *Writer) !void {
-        var col: usize = 0;
-
+    pub fn writeToWriter(self: *Self, writer: *Writer) !void {
         for (self.lines.items) |line| {
             for (line.items) |bufChar| {
-                switch (bufChar) {
+                try self.matchRenderStyle(bufChar.style, writer);
+                switch (bufChar.data) {
                     .Char => |char| {
                         try writer.writeByte(char);
-                        col += 1;
                     },
                     .Unicode => |char| {
                         try writer.writeAll(char);
-                        col += 1;
-                        // try sequences.setCursorCol(col + 1, writer);
                     },
                 }
             }
             try writer.writeByte('\n');
+        }
+    }
+
+    fn matchRenderStyle(self: *Self, styles: stylesMod.SimpleDataStyle, writer: *Writer) !void {
+        if (self.rendering.bold != styles.bold) {
+            if (styles.bold) {
+                try sequences.boldText(writer);
+            } else {
+                try sequences.normalText(writer);
+            }
+
+            self.rendering.bold = styles.bold;
         }
     }
 };
