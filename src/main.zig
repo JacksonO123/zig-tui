@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const c = @import("c");
 const zig_tui = @import("zig_tui");
 
 const app = @import("app.zig");
@@ -10,35 +11,31 @@ const sequences = @import("sequences.zig");
 const terminalMod = @import("terminal.zig");
 const utils = @import("utils.zig");
 
-const c = @cImport({
-    @cInclude("signal.h");
-});
-
+var ioGlobal: ?*std.Io = null;
 var isResized = std.atomic.Value(bool).init(false);
 
-fn sigWinchHandler(sig: i32) callconv(.c) void {
+fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
     _ = sig;
     isResized.store(true, .seq_cst);
 }
 
-fn sigIntHandler(sig: i32) callconv(.c) void {
+fn sigIntHandler(sig: std.c.SIG) callconv(.c) void {
     _ = sig;
-    var stdoutWriter = std.fs.File.stdout().writer(&.{});
+
+    var stdoutWriter = std.Io.File.stdout().writer(ioGlobal.?.*, &.{});
     const stdout = &stdoutWriter.interface;
     sequences.enableAutoWrap(stdout) catch {};
 }
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
+pub fn main(init: std.process.Init) !void {
+    var io = init.io;
+    ioGlobal = &io;
+    const gpa = init.gpa;
+    const arena = init.arena;
     const globalArenaAllocator = arena.allocator();
 
-    var gpAllocator = std.heap.GeneralPurposeAllocator(.{ .safety = builtin.mode == .Debug }){};
-    defer _ = gpAllocator.deinit();
-    const allocator = gpAllocator.allocator();
-
     var stdoutBuf: [1024]u8 = undefined;
-    var stdout = std.fs.File.stdout().writer(&stdoutBuf);
+    var stdout = std.Io.File.stdout().writer(io, &stdoutBuf);
     const writer = &stdout.interface;
 
     var action: std.posix.Sigaction = .{
@@ -68,17 +65,17 @@ pub fn main() !void {
 
     var size = try utils.getWinSize();
     var terminal = terminalMod.Terminal.init(globalArenaAllocator);
-    var renderContext = try context.RenderContext.init(allocator, &terminal, app.mockConfig, size);
+    var renderContext = try context.RenderContext.init(gpa, &terminal, app.mockConfig, size);
 
     const el = try app.renderUI(&terminal);
-    try renderer.render(allocator, &renderContext, el, size, writer);
+    try renderer.render(gpa, &renderContext, el, size, writer);
 
     while (true) {
         _ = c.sigsuspend(@ptrCast(&waitMask));
 
         if (isResized.swap(false, .seq_cst)) {
             size = try utils.getWinSize();
-            try renderer.render(allocator, &renderContext, el, size, writer);
+            try renderer.render(gpa, &renderContext, el, size, writer);
         }
     }
 }
