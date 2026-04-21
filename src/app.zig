@@ -3,12 +3,15 @@ const Writer = std.Io.Writer;
 
 const config = @import("config.zig");
 const sequences = @import("sequences.zig");
+const styles = @import("styles.zig");
 const terminalMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
 pub fn renderUI(terminal: *terminalMod.Terminal) !ui.UIElement {
-    const el = ui.Text.fromConstText("some text\nhere");
+    var el = ui.Text.fromConstText("some text\nhere");
+    el.styles.border(.Rounded);
+
     const el2 = ui.Text.fromConstText("more text");
     const layout = try ui.Layout.fromElements(
         terminal.allocator,

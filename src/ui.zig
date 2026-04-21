@@ -1,14 +1,27 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const styles = @import("styles.zig");
+
 pub const UIElementTypes = enum {
     Text,
     Layout,
 };
 
-pub const UIElement = union(UIElementTypes) {
+pub const UIElementVariant = union(UIElementTypes) {
     Text: Text,
     Layout: Layout,
+};
+
+pub const UIElement = struct {
+    const Self = @This();
+
+    styles: styles.Styles = .default,
+    variant: UIElementVariant,
+
+    pub fn fromVariant(variant: UIElementVariant) Self {
+        return .{ .variant = variant };
+    }
 };
 
 pub const LayoutTypes = enum {
@@ -22,11 +35,11 @@ pub const Text = struct {
     data: []const u8,
 
     pub fn fromConstText(str: []const u8) UIElement {
-        return UIElement{
+        return UIElement.fromVariant(.{
             .Text = .{
                 .data = str,
             },
-        };
+        });
     }
 };
 
@@ -43,6 +56,6 @@ pub const Layout = union(LayoutTypes) {
             .Vertical => .{ .Vertical = slice },
             .Horizontal => .{ .Horizontal = slice },
         };
-        return .{ .Layout = layout };
+        return UIElement.fromVariant(.{ .Layout = layout });
     }
 };
