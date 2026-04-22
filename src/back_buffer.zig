@@ -13,28 +13,20 @@ const BackBufferPos = struct {
     y: usize,
 };
 
-const BufferCharVariants = enum {
-    Char,
-    Unicode,
-};
-
-const BufferCharData = union(BufferCharVariants) {
-    Char: u8,
-    Unicode: []const u8,
-};
-
 const BufferChar = struct {
     style: stylesMod.SimpleDataStyle = .{},
-    data: BufferCharData,
+    data: struct {
+        bytes: [4]u8,
+        len: u8,
+    },
 };
 
 pub const BackBuffer = struct {
     const Self = @This();
 
-    const BackBufferLine = std.ArrayList(BufferChar);
-    const BufferLines = std.ArrayList(BackBufferLine);
+    const CharBuffer = std.ArrayList(BufferChar);
 
-    lines: BufferLines,
+    buffer: CharBuffer,
     pos: BackBufferPos,
     rendering: stylesMod.SimpleDataStyle = .{},
 
@@ -43,17 +35,14 @@ pub const BackBuffer = struct {
         config: configMod.Config,
         size: utils.WinSize,
     ) !Self {
-        const lineSize = if (config.fullscreen) size.row - 1 else @as(u16, 1);
-        var lines = try BufferLines.initCapacity(allocator, lineSize);
-
-        var i: usize = 0;
-        while (i < lineSize) : (i += 1) {
-            const line = try BackBuffer.createLine(allocator, size);
-            try lines.append(allocator, line);
-        }
+        const numLines = if (config.fullscreen) size.row - 1 else @as(u16, 1);
+        const numChars = numLines * size.col;
+        var lines = try CharBuffer.initCapacity(allocator, numChars);
+        lines.items.len = numChars;
+        @memset(lines.items, .{ .data = .{ .bytes = "    ".*, .len = 1 } });
 
         return .{
-            .lines = lines,
+            .buffer = lines,
             .pos = .{
                 .x = 0,
                 .y = 0,
@@ -61,17 +50,12 @@ pub const BackBuffer = struct {
         };
     }
 
-    inline fn createLine(allocator: Allocator, size: utils.WinSize) !BackBufferLine {
-        var line = try BackBufferLine.initCapacity(allocator, size.col);
-        line.items.len = size.col;
-        @memset(line.items, .{ .data = .{ .Char = ' ' } });
-        return line;
-    }
-
     pub fn deinit(self: *Self, allocator: Allocator) void {
-        for (self.lines.items) |line| {
+        for (self.buffer.items) |line| {
             line.deinit(allocator);
         }
+
+        self.buffer.deinit();
     }
 
     pub fn renderInBuffer(
@@ -131,13 +115,18 @@ pub const BackBuffer = struct {
             self.pos.y += 1;
         }
 
-        self.pos.x += styles.styles.padding.paddingX;
-        self.pos.y += styles.styles.padding.paddingY;
+        self.pos.x += styles.styles.padding.paddingLeft;
+        self.pos.y += styles.styles.padding.paddingTop;
     }
 
     fn renderStylesPostAdjust(self: *Self, styles: stylesMod.Styles) void {
-        renderStylesPreAdjust(self, styles);
-        // if this needs different logic, that goes here
+        if (styles.hasBorder()) {
+            self.pos.x += 1;
+            self.pos.y += 1;
+        }
+
+        self.pos.x += styles.styles.padding.paddingRight;
+        self.pos.y += styles.styles.padding.paddingBottom;
     }
 
     fn renderStylesPost(
@@ -201,15 +190,14 @@ pub const BackBuffer = struct {
         char: u8,
         styles: stylesMod.SimpleDataStyle,
     ) !void {
-        while (pos.y >= self.lines.items.len) {
-            const line = try BackBuffer.createLine(allocator, size);
-            try self.lines.append(allocator, line);
-        }
+        const index = pos.y * size.col + pos.x;
+        try self.ensureBufferCapacity(allocator, index + 1);
 
-        self.lines.items[pos.y].items[pos.x] = .{
-            .data = .{ .Char = char },
-            .style = styles,
-        };
+        var cell = &self.buffer.items[index];
+
+        cell.data.bytes[0] = char;
+        cell.data.len = 1;
+        cell.style = styles;
     }
 
     fn writeUnicodeAtPos(
@@ -219,28 +207,36 @@ pub const BackBuffer = struct {
         pos: BackBufferPos,
         chars: []const u8,
     ) !void {
-        while (pos.y >= self.lines.items.len) {
-            const line = try BackBuffer.createLine(allocator, size);
-            try self.lines.append(allocator, line);
-        }
+        const index = pos.y * size.col + pos.x;
+        try self.ensureBufferCapacity(allocator, index + 1);
 
-        self.lines.items[pos.y].items[pos.x] = .{ .data = .{ .Unicode = chars } };
+        var cell = &self.buffer.items[index];
+
+        @memcpy(cell.data.bytes[0..chars.len], chars);
+        cell.data.len = @intCast(chars.len);
     }
 
-    pub fn writeToWriter(self: *Self, writer: *Writer) !void {
-        for (self.lines.items) |line| {
-            for (line.items) |bufChar| {
-                try self.matchRenderStyle(bufChar.style, writer);
-                switch (bufChar.data) {
-                    .Char => |char| {
-                        try writer.writeByte(char);
-                    },
-                    .Unicode => |char| {
-                        try writer.writeAll(char);
-                    },
-                }
+    fn ensureBufferCapacity(self: *Self, allocator: Allocator, capacity: usize) !void {
+        if (capacity > self.buffer.items.len) {
+            if (capacity > self.buffer.capacity) {
+                try self.buffer.ensureTotalCapacity(allocator, capacity);
             }
-            try writer.writeByte('\n');
+
+            const prevLen = self.buffer.items.len;
+            self.buffer.items.len = capacity;
+            @memset(self.buffer.items[prevLen..], .{ .data = .{ .bytes = "    ".*, .len = 1 } });
+        }
+    }
+
+    pub fn writeToWriter(self: *Self, size: utils.WinSize, writer: *Writer) !void {
+        self.rendering = .{};
+        for (self.buffer.items, 0..) |cell, index| {
+            try self.matchRenderStyle(cell.style, writer);
+            try writer.writeAll(cell.data.bytes[0..cell.data.len]);
+
+            if ((index + 1) % size.col == 0) {
+                try writer.writeByte('\n');
+            }
         }
     }
 
@@ -268,6 +264,11 @@ pub const BackBuffer = struct {
             sequences.disableItalicText,
             writer,
         );
+    }
+
+    pub fn adjustToSize(self: *Self, allocator: Allocator, size: utils.WinSize) !void {
+        const maxIndex = size.col * size.row;
+        try self.ensureBufferCapacity(allocator, maxIndex);
     }
 };
 

@@ -76,8 +76,10 @@ pub const Styles = struct {
     styles: struct {
         border: ElementBorderStyles = .{},
         padding: struct {
-            paddingX: u16 = 0,
-            paddingY: u16 = 0,
+            paddingLeft: u16 = 0,
+            paddingRight: u16 = 0,
+            paddingTop: u16 = 0,
+            paddingBottom: u16 = 0,
         } = .{},
         boldState: ActiveState = .None,
         underlineState: ActiveState = .None,
@@ -104,18 +106,42 @@ pub const Styles = struct {
     }
 
     pub fn padding(self: *Self, amount: u16) *Self {
-        self.styles.padding.paddingX = amount;
-        self.styles.padding.paddingY = amount;
+        self.styles.padding.paddingLeft = amount;
+        self.styles.padding.paddingRight = amount;
+        self.styles.padding.paddingTop = amount;
+        self.styles.padding.paddingBottom = amount;
+        return self;
+    }
+
+    pub fn paddingLeft(self: *Self, amount: u16) *Self {
+        self.styles.padding.paddingLeft = amount;
+        return self;
+    }
+
+    pub fn paddingRight(self: *Self, amount: u16) *Self {
+        self.styles.padding.paddingRight = amount;
+        return self;
+    }
+
+    pub fn paddingTop(self: *Self, amount: u16) *Self {
+        self.styles.padding.paddingTop = amount;
+        return self;
+    }
+
+    pub fn paddingBottom(self: *Self, amount: u16) *Self {
+        self.styles.padding.paddingBottom = amount;
         return self;
     }
 
     pub fn paddingX(self: *Self, amount: u16) *Self {
-        self.styles.padding.paddingX = amount;
+        self.styles.padding.paddingLeft = amount;
+        self.styles.padding.paddingRight = amount;
         return self;
     }
 
     pub fn paddingY(self: *Self, amount: u16) *Self {
-        self.styles.padding.paddingY = amount;
+        self.styles.padding.paddingTop = amount;
+        self.styles.padding.paddingBottom = amount;
         return self;
     }
 

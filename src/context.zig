@@ -30,4 +30,8 @@ pub const RenderContext = struct {
     pub fn deinit(self: *Self, allocator: Allocator) void {
         self.backBuffer.deinit(allocator);
     }
+
+    pub fn adjustToSize(self: *Self, allocator: Allocator, size: utils.WinSize) !void {
+        try self.backBuffer.adjustToSize(allocator, size);
+    }
 };

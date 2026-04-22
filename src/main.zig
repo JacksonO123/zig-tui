@@ -75,6 +75,7 @@ pub fn main(init: std.process.Init) !void {
 
         if (isResized.swap(false, .seq_cst)) {
             size = try utils.getWinSize();
+            try renderContext.adjustToSize(gpa, size);
             try renderer.render(gpa, &renderContext, el, size, writer);
         }
     }

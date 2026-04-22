@@ -24,6 +24,6 @@ pub fn render(
     context.backBuffer.pos = .{ .x = 0, .y = 0 };
 
     try context.backBuffer.renderInBuffer(allocator, el, size);
-    try context.backBuffer.writeToWriter(writer);
+    try context.backBuffer.writeToWriter(size, writer);
     try writer.flush();
 }
