@@ -17,19 +17,22 @@ pub fn render(
     writer: *Writer,
     first: bool,
 ) !void {
-    _ = first;
     if (context.config.fullscreen) {
         try sequences.clearScreen(writer);
+        try sequences.setCursorPosAbsolute(1, 1, writer);
+    } else if (!first) {
+        if (context.state.rowOffset > 0) {
+            try sequences.moveCursorUp(@intCast(context.state.rowOffset), writer);
+        }
+        try sequences.setCursorCol(1, writer);
+        try sequences.eraseDisplayAfterCursor(writer);
     }
 
-    try sequences.setCursorPos(context, 1, 1, writer);
-    context.backBuffer.pos = .{ .x = 0, .y = 0 };
-
+    try context.backBuffer.reset(allocator, context.config, size);
     try context.backBuffer.renderInBuffer(allocator, el, size);
-    context.state.rowOffset = @intCast(context.backBuffer.pos.y);
     try context.backBuffer.writeToWriter(size, writer);
-    // try writeDiff(allocator, context, size, writer, first);
 
+    context.state.rowOffset = @intCast(context.backBuffer.buffer.items.len / size.col);
     context.state.forceReRender = false;
 
     try writer.flush();

@@ -15,6 +15,7 @@ const Codes = struct {
     disableAutoWrap: Str,
     enableAutoWrap: Str,
     clearScreen: Str,
+    resetStyles: Str,
 
     boldText: Str,
     disableBoldText: Str,
@@ -35,6 +36,7 @@ pub const codes: Codes = .{
     .disableAutoWrap = "\x1b[?7l",
     .enableAutoWrap = "\x1b[?7h",
     .clearScreen = "\x1b[2J",
+    .resetStyles = "\x1b[0m",
 
     .boldText = "\x1b[1m",
     .disableBoldText = "\x1b[22m",
@@ -76,6 +78,10 @@ pub fn enableAutoWrap(writer: *Writer) !void {
 
 pub fn clearScreen(writer: *Writer) !void {
     try writer.writeAll(codes.clearScreen);
+}
+
+pub fn resetStyles(writer: *Writer) !void {
+    try writer.writeAll(codes.resetStyles);
 }
 
 pub fn setCursorPosAbsolute(row: usize, col: usize, writer: *Writer) !void {

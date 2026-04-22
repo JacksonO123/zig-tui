@@ -70,6 +70,19 @@ pub const BackBuffer = struct {
         };
     }
 
+    pub fn reset(
+        self: *Self,
+        allocator: Allocator,
+        config: configMod.Config,
+        size: utils.WinSize,
+    ) !void {
+        const numLines = if (config.fullscreen) size.row - 1 else @as(u16, 1);
+        const numChars = numLines * size.col;
+        try self.buffer.resize(allocator, numChars);
+        @memset(self.buffer.items, .{ .data = .{ .bytes = "    ".*, .len = 1 } });
+        self.pos = .{ .x = 0, .y = 0 };
+    }
+
     pub fn deinit(self: *Self, allocator: Allocator) void {
         for (self.buffer.items) |line| {
             line.deinit(allocator);
@@ -241,6 +254,7 @@ pub const BackBuffer = struct {
 
     pub fn writeToWriter(self: *Self, size: utils.WinSize, writer: *Writer) !void {
         self.rendering = .{};
+        try sequences.resetStyles(writer);
         for (self.buffer.items, 0..) |cell, index| {
             try self.matchRenderStyle(cell.style, writer);
             try writer.writeAll(cell.data.bytes[0..cell.data.len]);
