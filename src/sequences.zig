@@ -47,7 +47,7 @@ pub const codes: Codes = .{
 };
 
 pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writer) !void {
-    const rowDiff = row - context.rowOffset;
+    const rowDiff = row - context.state.rowOffset;
     if (rowDiff < 0) {
         try writer.print(codes.moveCursorUp, .{rowDiff * -1});
     } else if (rowDiff != 0) {
@@ -55,20 +55,7 @@ pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writ
     }
     try writer.print(codes.setCursorColAbsolute, .{col});
 
-    context.rowOffset = row;
-}
-
-pub fn writeAscii(context: *RenderContext, ascii: []const u8, writer: *Writer) !void {
-    var rowChange: i32 = 0;
-    for (ascii) |char| {
-        if (char == '\n') {
-            rowChange += 1;
-        }
-    }
-
-    context.rowOffset += rowChange;
-
-    try writer.writeAll(ascii);
+    context.state.rowOffset = row;
 }
 
 pub fn setCursorCol(col: usize, writer: *Writer) !void {
@@ -117,4 +104,12 @@ pub fn italicText(writer: *Writer) !void {
 
 pub fn disableItalicText(writer: *Writer) !void {
     try writer.writeAll(codes.disableItalicText);
+}
+
+pub fn moveCursorUp(amount: usize, writer: *Writer) !void {
+    try writer.print(codes.moveCursorUp, .{amount});
+}
+
+pub fn moveCursorDown(amount: usize, writer: *Writer) !void {
+    try writer.print(codes.moveCursorDown, .{amount});
 }
