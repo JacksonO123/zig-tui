@@ -24,7 +24,7 @@ pub const UIElement = struct {
     }
 };
 
-pub const LayoutTypes = enum {
+const LayoutTypes = enum {
     Vertical,
     Horizontal,
 };

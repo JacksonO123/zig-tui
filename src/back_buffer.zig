@@ -90,10 +90,13 @@ pub const BackBuffer = struct {
             .Layout => |layout| {
                 switch (layout) {
                     .Horizontal => |elements| {
+                        var maxY = startPos.y;
                         for (elements) |el| {
                             try self.renderInBuffer(allocator, el, size);
+                            maxY = @max(maxY, self.pos.y);
                             self.pos.y = startPos.y;
                         }
+                        self.pos.y = maxY;
                     },
                     .Vertical => |elements| {
                         for (elements) |el| {
