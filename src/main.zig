@@ -71,7 +71,7 @@ pub fn main(init: std.process.Init) !void {
         size,
     );
 
-    const el = try app.renderUI(&renderContext.terminal);
+    var el = try app.renderUI(&renderContext.terminal);
     try renderer.render(gpa, &renderContext, el, size, writer, true);
 
     while (true) {
@@ -79,7 +79,8 @@ pub fn main(init: std.process.Init) !void {
 
         if (isResized.swap(false, .seq_cst)) {
             size = try utils.getWinSize();
-            try renderContext.onTerminalResize();
+            try renderContext.onTerminalResize(size);
+            el = try app.renderUI(&renderContext.terminal);
             try renderer.render(gpa, &renderContext, el, size, writer, false);
         }
     }

@@ -9,32 +9,27 @@ const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
 pub fn renderUI(terminal: *terminalMod.Terminal) !ui.UIElement {
-    var xBox = ui.Text.fromConstText("X");
-    _ = xBox.styles.border(.Rounded).paddingX(1).bold();
+    // const widthText = try std.fmt.allocPrint(terminal.allocator, "w: {d}", .{terminal.size.col});
+    // const heightText = try std.fmt.allocPrint(terminal.allocator, "h: {d}", .{terminal.size.row});
 
-    var oBox = ui.Text.fromConstText("O");
-    oBox.styles = xBox.styles;
-    _ = oBox.styles.underline();
+    // var wBox = ui.Text.fromConstText(widthText);
+    // _ = wBox.styles.border(.Rounded).paddingX(1).italic();
 
-    const hLayout1 = try ui.Layout.fromElements(
-        terminal.allocator,
-        &[_]ui.UIElement{ xBox, oBox, xBox },
-        .Horizontal,
-    );
+    // var hBox = ui.Text.fromConstText(heightText);
+    // _ = hBox.styles.underline().bold().border(.Square);
 
-    const hLayout2 = try ui.Layout.fromElements(
-        terminal.allocator,
-        &[_]ui.UIElement{ oBox, xBox, oBox },
-        .Horizontal,
-    );
+    // const layout = try ui.Layout.fromElements(
+    //     terminal.allocator,
+    //     &[_]ui.UIElement{ wBox, hBox },
+    //     if (terminal.size.col % 2 == 0) .Vertical else .Horizontal,
+    // );
 
-    const layout = try ui.Layout.fromElements(
-        terminal.allocator,
-        &[_]ui.UIElement{ hLayout1, hLayout2, hLayout1 },
-        .Vertical,
-    );
+    // return layout;
 
-    return layout;
+    _ = terminal;
+    var box = ui.Text.fromConstText("");
+    _ = box.styles.border(.Rounded);
+    return box;
 }
 
 pub const mockConfig: config.Config = .{

@@ -106,7 +106,7 @@ pub const BackBuffer = struct {
 
         switch (element.variant) {
             .Text => |text| {
-                var maxWidth: usize = 0;
+                var maxX: usize = self.pos.x;
                 for (text.data) |char| {
                     if (char == '\n') {
                         self.pos.x = startPos.x;
@@ -116,9 +116,9 @@ pub const BackBuffer = struct {
 
                     try self.writeCharAtPos(allocator, size, self.pos, char, simpleStyles);
                     self.pos.x += 1;
-                    maxWidth = @max(maxWidth, self.pos.x);
+                    maxX = @max(maxX, self.pos.x);
                 }
-                self.pos.x = maxWidth;
+                self.pos.x = maxX;
             },
             .Layout => |layout| {
                 switch (layout) {

@@ -32,7 +32,7 @@ pub const RenderContext = struct {
         size: utils.WinSize,
     ) !Self {
         var terminalArena = std.heap.ArenaAllocator.init(globalArena);
-        const terminal = terminalMod.Terminal.init(terminalArena.allocator());
+        const terminal = terminalMod.Terminal.init(terminalArena.allocator(), size);
 
         return .{
             .terminalArena = terminalArena,
@@ -47,7 +47,7 @@ pub const RenderContext = struct {
         self.backBuffer.deinit(allocator);
     }
 
-    pub fn onTerminalResize(self: *Self) !void {
-        self.state.forceReRender = true;
+    pub fn onTerminalResize(self: *Self, size: utils.WinSize) !void {
+        self.terminal.size = size;
     }
 };

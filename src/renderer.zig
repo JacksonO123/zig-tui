@@ -30,7 +30,7 @@ pub fn render(
 
     try context.backBuffer.reset(allocator, context.config, size);
     try context.backBuffer.renderInBuffer(allocator, el, size);
-    try context.backBuffer.writeToWriter(size, writer);
+    try writeDiff(allocator, context, size, writer);
 
     context.state.rowOffset = @intCast(context.backBuffer.buffer.items.len / size.col);
     context.state.forceReRender = false;
@@ -43,70 +43,51 @@ fn writeDiff(
     context: *contextMod.RenderContext,
     size: utils.WinSize,
     writer: *Writer,
-    first: bool,
 ) !void {
-    _ = first;
-    _ = allocator;
-    // var toLen: usize = self.buffer.items.len;
+    var toLen: usize = context.frontBuffer.buffer.items.len;
 
-    // if (backBuffer.buffer.items.len < self.buffer.items.len) {
-    //     self.buffer.items.len = backBuffer.buffer.items.len;
-    //     toLen = self.buffer.items.len;
-    // } else if (backBuffer.buffer.items.len > self.buffer.items.len) {
-    //     const slice = backBuffer.buffer.items[self.buffer.items.len..];
-    //     try self.buffer.appendSlice(allocator, slice);
-    // }
+    if (context.backBuffer.buffer.items.len < context.frontBuffer.buffer.items.len) {
+        context.frontBuffer.buffer.items.len = context.backBuffer.buffer.items.len;
+        toLen = context.frontBuffer.buffer.items.len;
+    } else if (context.backBuffer.buffer.items.len > context.frontBuffer.buffer.items.len) {
+        const slice = context.backBuffer.buffer.items[context.frontBuffer.buffer.items.len..];
+        try context.frontBuffer.buffer.appendSlice(allocator, slice);
+    }
 
-    for (context.backBuffer.buffer.items, 0..) |char, i| {
-        try matchRenderStyle(&context.frontBuffer.rendering, char.style, writer);
-        // if (first) {
-        //     try writer.writeAll(char.data.bytes[0..char.data.len]);
-        // } else {
-        try writer.writeByte('@');
-        // }
+    var i: usize = 0;
+    var atCol: usize = 0;
+    while (i < toLen) : (i += 1) {
+        if (context.state.forceReRender or
+            !context.frontBuffer.buffer.items[i].compareTo(context.backBuffer.buffer.items[i]))
+        {
+            if (atCol < i) {
+                try sequences.setCursorCol(i + 1, writer);
+            }
+
+            const item = context.backBuffer.buffer.items[i];
+            try matchRenderStyle(&context.frontBuffer.rendering, item.style, writer);
+            try writer.writeAll(item.data.bytes[0..item.data.len]);
+
+            atCol += 1;
+        }
 
         if ((i + 1) % size.col == 0) {
             try writer.writeByte('\n');
-            context.state.rowOffset += 1;
         }
     }
 
-    // var i: usize = 0;
-    // var colAt: usize = 0;
-    // while (i < toLen) : (i += 1) {
-    //     if (state.forceReRender or
-    //         !self.buffer.items[i].compareTo(backBuffer.buffer.items[i]))
-    //     {
-    //         if (colAt < i) {
-    //             try sequences.setCursorCol(i, writer);
-    //         }
+    i = toLen;
+    while (i < context.frontBuffer.buffer.items.len) : (i += 1) {
+        const item = context.frontBuffer.buffer.items[i];
+        try matchRenderStyle(&context.frontBuffer.rendering, item.style, writer);
+        try writer.writeAll(item.data.bytes[0..item.data.len]);
 
-    //         const item = backBuffer.buffer.items[i];
-    //         try self.matchRenderStyle(item.style, writer);
-    //         try writer.writeAll(item.data.bytes[0..item.data.len]);
+        if ((i + 1) % size.col == 0) {
+            try writer.writeByte('\n');
+        }
+    }
 
-    //         colAt += 1;
-    //     }
-
-    //     if ((i + 1) % size.col == 0) {
-    //         try writer.writeByte('\n');
-    //         colAt = 0;
-    //     }
-    // }
-
-    // i = toLen;
-    // while (i < self.buffer.items.len) : (i += 1) {
-    //     const item = self.buffer.items[i];
-    //     try self.matchRenderStyle(item.style, writer);
-    //     try writer.writeAll(item.data.bytes[0..item.data.len]);
-
-    //     colAt += 1;
-
-    //     if ((i + 1) % size.col == 0) {
-    //         try writer.writeByte('\n');
-    //         colAt = 0;
-    //     }
-    // }
+    @memcpy(context.frontBuffer.buffer.items, context.backBuffer.buffer.items);
 }
 
 fn matchRenderStyle(
