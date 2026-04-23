@@ -38,7 +38,7 @@ pub const RenderContext = struct {
             .terminalArena = terminalArena,
             .terminal = terminal,
             .config = config,
-            .backBuffer = try backBufferMod.BackBuffer.initFromConfig(allocator, config, size),
+            .backBuffer = try backBufferMod.BackBuffer.init(allocator, size),
             .frontBuffer = .empty,
         };
     }

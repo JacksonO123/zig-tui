@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
+const bufferUtil = @import("buffer.zig");
 const configMod = @import("config.zig");
 const frontBufferMod = @import("front_buffer.zig");
 const renderer = @import("renderer.zig");
@@ -15,54 +16,25 @@ const BackBufferPos = struct {
     y: usize,
 };
 
-pub const BufferChar = struct {
-    const Self = @This();
-
-    style: stylesMod.SimpleDataStyle = .{},
-    data: struct {
-        bytes: [4]u8,
-        len: u8,
-    },
-
-    pub fn compareTo(self: Self, other: Self) bool {
-        if (!std.meta.eql(self.style, other.style)) {
-            return false;
-        }
-
-        if (!std.mem.eql(
-            u8,
-            self.data.bytes[0..self.data.len],
-            other.data.bytes[0..other.data.len],
-        )) {
-            return false;
-        }
-
-        return true;
-    }
-};
-
 pub const BackBuffer = struct {
     const Self = @This();
 
-    const CharBuffer = std.ArrayList(BufferChar);
-
-    buffer: CharBuffer,
+    buffer: bufferUtil.CharBuffer,
+    lineLimit: usize,
     pos: BackBufferPos,
     rendering: stylesMod.SimpleDataStyle = .{},
 
-    pub inline fn initFromConfig(
+    pub inline fn init(
         allocator: Allocator,
-        config: configMod.Config,
         size: utils.WinSize,
     ) !Self {
-        const numLines = if (config.fullscreen) size.row - 1 else @as(u16, 1);
-        const numChars = numLines * size.col;
-        var lines = try CharBuffer.initCapacity(allocator, numChars);
-        lines.items.len = numChars;
-        @memset(lines.items, .{ .data = .{ .bytes = "    ".*, .len = 1 } });
+        var lines: bufferUtil.CharBuffer = .empty;
+        const line = try bufferUtil.createLine(allocator, size.col);
+        try lines.append(allocator, line);
 
         return .{
             .buffer = lines,
+            .lineLimit = 1,
             .pos = .{
                 .x = 0,
                 .y = 0,
@@ -73,13 +45,13 @@ pub const BackBuffer = struct {
     pub fn reset(
         self: *Self,
         allocator: Allocator,
-        config: configMod.Config,
         size: utils.WinSize,
     ) !void {
-        const numLines = if (config.fullscreen) size.row - 1 else @as(u16, 1);
-        const numChars = numLines * size.col;
-        try self.buffer.resize(allocator, numChars);
-        @memset(self.buffer.items, .{ .data = .{ .bytes = "    ".*, .len = 1 } });
+        for (self.buffer.items) |*line| {
+            try bufferUtil.prepareLineBuffer(allocator, line, size.col);
+        }
+
+        self.lineLimit = 1;
         self.pos = .{ .x = 0, .y = 0 };
     }
 
@@ -226,10 +198,10 @@ pub const BackBuffer = struct {
         char: u8,
         styles: stylesMod.SimpleDataStyle,
     ) !void {
-        const index = pos.y * size.col + pos.x;
-        try utils.ensureBufferCapacity(allocator, &self.buffer, index + 1);
-
-        var cell = &self.buffer.items[index];
+        try self.ensureLineExists(allocator, pos.y, size.col);
+        const line = self.buffer.items[pos.y];
+        if (pos.x >= line.items.len) return;
+        var cell = &line.items[pos.x];
 
         cell.data.bytes[0] = char;
         cell.data.len = 1;
@@ -243,51 +215,25 @@ pub const BackBuffer = struct {
         pos: BackBufferPos,
         chars: []const u8,
     ) !void {
-        const index = pos.y * size.col + pos.x;
-        try utils.ensureBufferCapacity(allocator, &self.buffer, index + 1);
-
-        var cell = &self.buffer.items[index];
+        try self.ensureLineExists(allocator, pos.y, size.col);
+        const line = self.buffer.items[pos.y];
+        if (pos.x >= line.items.len) return;
+        var cell = &line.items[pos.x];
 
         @memcpy(cell.data.bytes[0..chars.len], chars);
         cell.data.len = @intCast(chars.len);
     }
 
-    pub fn writeToWriter(self: *Self, size: utils.WinSize, writer: *Writer) !void {
-        self.rendering = .{};
-        try sequences.resetStyles(writer);
-        for (self.buffer.items, 0..) |cell, index| {
-            try self.matchRenderStyle(cell.style, writer);
-            try writer.writeAll(cell.data.bytes[0..cell.data.len]);
-
-            if ((index + 1) % size.col == 0) {
-                try writer.writeByte('\n');
-            }
+    fn ensureLineExists(self: *Self, allocator: Allocator, lineIndex: usize, width: usize) !void {
+        if (lineIndex < self.buffer.items.len) {
+            self.lineLimit = @max(self.lineLimit, lineIndex + 1);
+            return;
         }
-    }
 
-    fn matchRenderStyle(self: *Self, styles: stylesMod.SimpleDataStyle, writer: *Writer) !void {
-        try renderer.updateSpecificRenderStyle(
-            &self.rendering.bold,
-            styles.bold,
-            sequences.boldText,
-            sequences.disableBoldText,
-            writer,
-        );
-
-        try renderer.updateSpecificRenderStyle(
-            &self.rendering.underline,
-            styles.underline,
-            sequences.underlineText,
-            sequences.disableUnderlineText,
-            writer,
-        );
-
-        try renderer.updateSpecificRenderStyle(
-            &self.rendering.italic,
-            styles.italic,
-            sequences.italicText,
-            sequences.disableItalicText,
-            writer,
-        );
+        while (self.buffer.items.len < lineIndex + 1) {
+            const line = try bufferUtil.createLine(allocator, width);
+            try self.buffer.append(allocator, line);
+        }
+        self.lineLimit = lineIndex + 1;
     }
 };

@@ -15,19 +15,3 @@ pub fn getWinSize() !WinSize {
     }
     return .{ .row = winsize.row, .col = winsize.col };
 }
-
-pub fn ensureBufferCapacity(
-    allocator: Allocator,
-    buf: *std.ArrayList(backBufferMod.BufferChar),
-    capacity: usize,
-) !void {
-    if (capacity <= buf.items.len) return;
-
-    if (capacity > buf.capacity) {
-        try buf.ensureTotalCapacity(allocator, capacity);
-    }
-
-    const prevLen = buf.items.len;
-    buf.items.len = capacity;
-    @memset(buf.items[prevLen..], .{ .data = .{ .bytes = "    ".*, .len = 1 } });
-}
