@@ -3,6 +3,8 @@ const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
 const configMod = @import("config.zig");
+const frontBufferMod = @import("front_buffer.zig");
+const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
 const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
@@ -13,12 +15,30 @@ const BackBufferPos = struct {
     y: usize,
 };
 
-const BufferChar = struct {
+pub const BufferChar = struct {
+    const Self = @This();
+
     style: stylesMod.SimpleDataStyle = .{},
     data: struct {
         bytes: [4]u8,
         len: u8,
     },
+
+    pub fn compareTo(self: Self, other: Self) bool {
+        if (!std.meta.eql(self.style, other.style)) {
+            return false;
+        }
+
+        if (!std.mem.eql(
+            u8,
+            self.data.bytes[0..self.data.len],
+            other.data.bytes[0..other.data.len],
+        )) {
+            return false;
+        }
+
+        return true;
+    }
 };
 
 pub const BackBuffer = struct {
@@ -48,6 +68,19 @@ pub const BackBuffer = struct {
                 .y = 0,
             },
         };
+    }
+
+    pub fn reset(
+        self: *Self,
+        allocator: Allocator,
+        config: configMod.Config,
+        size: utils.WinSize,
+    ) !void {
+        const numLines = if (config.fullscreen) size.row - 1 else @as(u16, 1);
+        const numChars = numLines * size.col;
+        try self.buffer.resize(allocator, numChars);
+        @memset(self.buffer.items, .{ .data = .{ .bytes = "    ".*, .len = 1 } });
+        self.pos = .{ .x = 0, .y = 0 };
     }
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
@@ -194,7 +227,7 @@ pub const BackBuffer = struct {
         styles: stylesMod.SimpleDataStyle,
     ) !void {
         const index = pos.y * size.col + pos.x;
-        try self.ensureBufferCapacity(allocator, index + 1);
+        try utils.ensureBufferCapacity(allocator, &self.buffer, index + 1);
 
         var cell = &self.buffer.items[index];
 
@@ -211,7 +244,7 @@ pub const BackBuffer = struct {
         chars: []const u8,
     ) !void {
         const index = pos.y * size.col + pos.x;
-        try self.ensureBufferCapacity(allocator, index + 1);
+        try utils.ensureBufferCapacity(allocator, &self.buffer, index + 1);
 
         var cell = &self.buffer.items[index];
 
@@ -219,20 +252,9 @@ pub const BackBuffer = struct {
         cell.data.len = @intCast(chars.len);
     }
 
-    fn ensureBufferCapacity(self: *Self, allocator: Allocator, capacity: usize) !void {
-        if (capacity > self.buffer.items.len) {
-            if (capacity > self.buffer.capacity) {
-                try self.buffer.ensureTotalCapacity(allocator, capacity);
-            }
-
-            const prevLen = self.buffer.items.len;
-            self.buffer.items.len = capacity;
-            @memset(self.buffer.items[prevLen..], .{ .data = .{ .bytes = "    ".*, .len = 1 } });
-        }
-    }
-
     pub fn writeToWriter(self: *Self, size: utils.WinSize, writer: *Writer) !void {
         self.rendering = .{};
+        try sequences.resetStyles(writer);
         for (self.buffer.items, 0..) |cell, index| {
             try self.matchRenderStyle(cell.style, writer);
             try writer.writeAll(cell.data.bytes[0..cell.data.len]);
@@ -244,7 +266,7 @@ pub const BackBuffer = struct {
     }
 
     fn matchRenderStyle(self: *Self, styles: stylesMod.SimpleDataStyle, writer: *Writer) !void {
-        try updateSpecificRenderStyle(
+        try renderer.updateSpecificRenderStyle(
             &self.rendering.bold,
             styles.bold,
             sequences.boldText,
@@ -252,7 +274,7 @@ pub const BackBuffer = struct {
             writer,
         );
 
-        try updateSpecificRenderStyle(
+        try renderer.updateSpecificRenderStyle(
             &self.rendering.underline,
             styles.underline,
             sequences.underlineText,
@@ -260,7 +282,7 @@ pub const BackBuffer = struct {
             writer,
         );
 
-        try updateSpecificRenderStyle(
+        try renderer.updateSpecificRenderStyle(
             &self.rendering.italic,
             styles.italic,
             sequences.italicText,
@@ -268,22 +290,4 @@ pub const BackBuffer = struct {
             writer,
         );
     }
-
-    pub fn adjustToSize(self: *Self, allocator: Allocator, size: utils.WinSize) !void {
-        const maxIndex = size.col * size.row;
-        try self.ensureBufferCapacity(allocator, maxIndex);
-    }
 };
-
-fn updateSpecificRenderStyle(
-    cond1: *bool,
-    cond2: bool,
-    enableFn: fn (*Writer) anyerror!void,
-    disableFn: fn (*Writer) anyerror!void,
-    writer: *Writer,
-) !void {
-    if (cond1.* != cond2) {
-        if (cond2) try enableFn(writer) else try disableFn(writer);
-        cond1.* = cond2;
-    }
-}

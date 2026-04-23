@@ -64,19 +64,23 @@ pub fn main(init: std.process.Init) !void {
     }
 
     var size = try utils.getWinSize();
-    var terminal = terminalMod.Terminal.init(globalArenaAllocator);
-    var renderContext = try context.RenderContext.init(gpa, &terminal, app.mockConfig, size);
+    var renderContext = try context.RenderContext.init(
+        gpa,
+        globalArenaAllocator,
+        app.mockConfig,
+        size,
+    );
 
-    const el = try app.renderUI(&terminal);
-    try renderer.render(gpa, &renderContext, el, size, writer);
+    const el = try app.renderUI(&renderContext.terminal);
+    try renderer.render(gpa, &renderContext, el, size, writer, true);
 
     while (true) {
         _ = c.sigsuspend(@ptrCast(&waitMask));
 
         if (isResized.swap(false, .seq_cst)) {
             size = try utils.getWinSize();
-            try renderContext.adjustToSize(gpa, size);
-            try renderer.render(gpa, &renderContext, el, size, writer);
+            try renderContext.onTerminalResize();
+            try renderer.render(gpa, &renderContext, el, size, writer, false);
         }
     }
 }

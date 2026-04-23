@@ -1,29 +1,45 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;
 
 const backBufferMod = @import("back_buffer.zig");
 const configMod = @import("config.zig");
+const frontBufferMod = @import("front_buffer.zig");
 const terminalMod = @import("terminal.zig");
+const ui = @import("ui.zig");
 const utils = @import("utils.zig");
+
+pub const RenderState = struct {
+    rowOffset: i32 = 1,
+    forceReRender: bool = false,
+};
 
 pub const RenderContext = struct {
     const Self = @This();
 
     config: configMod.Config,
-    terminal: *terminalMod.Terminal,
+    terminalArena: std.heap.ArenaAllocator,
+    terminal: terminalMod.Terminal,
     backBuffer: backBufferMod.BackBuffer,
-    rowOffset: i32 = 1,
+    frontBuffer: frontBufferMod.FrontBuffer,
+
+    state: RenderState = .{},
 
     pub inline fn init(
         allocator: Allocator,
-        terminal: *terminalMod.Terminal,
+        globalArena: Allocator,
         config: configMod.Config,
         size: utils.WinSize,
     ) !Self {
+        var terminalArena = std.heap.ArenaAllocator.init(globalArena);
+        const terminal = terminalMod.Terminal.init(terminalArena.allocator());
+
         return .{
+            .terminalArena = terminalArena,
             .terminal = terminal,
             .config = config,
             .backBuffer = try backBufferMod.BackBuffer.initFromConfig(allocator, config, size),
+            .frontBuffer = .empty,
         };
     }
 
@@ -31,7 +47,7 @@ pub const RenderContext = struct {
         self.backBuffer.deinit(allocator);
     }
 
-    pub fn adjustToSize(self: *Self, allocator: Allocator, size: utils.WinSize) !void {
-        try self.backBuffer.adjustToSize(allocator, size);
+    pub fn onTerminalResize(self: *Self) !void {
+        self.state.forceReRender = true;
     }
 };
