@@ -72,7 +72,7 @@ pub fn main(init: std.process.Init) !void {
     );
 
     var el = try app.renderUI(&renderContext.terminal);
-    try renderer.render(gpa, &renderContext, el, size, writer, true);
+    try renderer.render(gpa, &renderContext, el, size, writer);
 
     while (true) {
         _ = c.sigsuspend(@ptrCast(&waitMask));
@@ -81,7 +81,7 @@ pub fn main(init: std.process.Init) !void {
             size = try utils.getWinSize();
             try renderContext.onTerminalResize(size);
             el = try app.renderUI(&renderContext.terminal);
-            try renderer.render(gpa, &renderContext, el, size, writer, false);
+            try renderer.render(gpa, &renderContext, el, size, writer);
         }
     }
 }

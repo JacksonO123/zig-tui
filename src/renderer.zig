@@ -15,24 +15,19 @@ pub fn render(
     el: ui.UIElement,
     size: utils.WinSize,
     writer: *Writer,
-    first: bool,
 ) !void {
-    if (context.config.fullscreen) {
-        try sequences.clearScreen(writer);
-        try sequences.setCursorPosAbsolute(1, 1, writer);
-    } else if (!first) {
-        if (context.state.rowOffset > 0) {
-            try sequences.moveCursorUp(@intCast(context.state.rowOffset), writer);
-        }
-        try sequences.setCursorCol(1, writer);
-        try sequences.eraseDisplayAfterCursor(writer);
-    }
+    // TODO
+    // if (context.config.fullscreen) {
+    //     try sequences.clearScreen(writer);
+    //     try sequences.setCursorPosAbsolute(1, 1, writer);
+    // }
 
+    try sequences.setCursorPos(context, 1, 1, writer);
     try context.backBuffer.reset(allocator, context.config, size);
     try context.backBuffer.renderInBuffer(allocator, el, size);
     try writeDiff(allocator, context, size, writer);
 
-    context.state.rowOffset = @intCast(context.backBuffer.buffer.items.len / size.col);
+    context.state.rowOffset = @as(i32, @intCast(context.backBuffer.pos.y)) + 1;
     context.state.forceReRender = false;
 
     try writer.flush();
@@ -61,7 +56,7 @@ fn writeDiff(
             !context.frontBuffer.buffer.items[i].compareTo(context.backBuffer.buffer.items[i]))
         {
             if (atCol < i) {
-                try sequences.setCursorCol(i + 1, writer);
+                try sequences.setCursorCol((i % size.col) + 1, writer);
             }
 
             const item = context.backBuffer.buffer.items[i];
