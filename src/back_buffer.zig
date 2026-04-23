@@ -48,7 +48,7 @@ pub const BackBuffer = struct {
         size: utils.WinSize,
     ) !void {
         for (self.buffer.items) |*line| {
-            try bufferUtil.prepareLineBuffer(allocator, line, size.col);
+            try bufferUtil.prepareLineBuffer(allocator, line, size.col, .All);
         }
 
         self.lineLimit = 1;

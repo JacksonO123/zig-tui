@@ -32,8 +32,12 @@ pub const FrontBuffer = struct {
 
         self.lineLimit = lineLimit;
 
+        for (self.buffer.items[self.lineLimit..]) |*line| {
+            try bufferUtil.prepareLineBuffer(allocator, line, width, .All);
+        }
+
         for (self.buffer.items[0..self.lineLimit]) |*line| {
-            try bufferUtil.prepareLineBuffer(allocator, line, width);
+            try bufferUtil.prepareLineBuffer(allocator, line, width, .New);
         }
     }
 };

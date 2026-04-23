@@ -60,14 +60,31 @@ pub fn createLine(allocator: Allocator, size: usize) !BufferLine {
     return line;
 }
 
+const ClearType = enum {
+    New,
+    All,
+};
+
 pub fn prepareLineBuffer(
     allocator: Allocator,
     line: *BufferLine,
     width: usize,
+    clearType: ClearType,
 ) !void {
     try line.ensureTotalCapacity(allocator, width);
+    const prevLen = line.items.len;
     line.items.len = width;
-    @memset(line.items, .{ .data = .{ .bytes = "    ".*, .len = 1 } });
+
+    switch (clearType) {
+        .All => {
+            @memset(line.items, .{ .data = .{ .bytes = "    ".*, .len = 1 } });
+        },
+        .New => {
+            if (prevLen < width) {
+                @memset(line.items[prevLen..], .{ .data = .{ .bytes = "    ".*, .len = 1 } });
+            }
+        },
+    }
 }
 
 pub fn writeToWriter(
