@@ -5,9 +5,10 @@ const Allocator = std.mem.Allocator;
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const sequences = @import("sequences.zig");
+const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
-const stylesMod = @import("styles.zig");
+const bufferUtil = @import("buffer.zig");
 
 pub fn render(
     allocator: Allocator,
@@ -15,24 +16,24 @@ pub fn render(
     el: ui.UIElement,
     size: utils.WinSize,
     writer: *Writer,
-    first: bool,
+    count: usize,
 ) !void {
-    if (context.config.fullscreen) {
-        try sequences.clearScreen(writer);
-        try sequences.setCursorPosAbsolute(1, 1, writer);
-    } else if (!first) {
-        if (context.state.rowOffset > 0) {
-            try sequences.moveCursorUp(@intCast(context.state.rowOffset), writer);
-        }
-        try sequences.setCursorCol(1, writer);
-        try sequences.eraseDisplayAfterCursor(writer);
-    }
+    _ = count;
+    // TODO
+    // if (context.config.fullscreen) {
+    //     try sequences.clearScreen(writer);
+    //     try sequences.setCursorPosAbsolute(1, 1, writer);
+    // }
 
-    try context.backBuffer.reset(allocator, context.config, size);
+    try sequences.setCursorPos(context, 1, 1, writer);
+
+    try context.backBuffer.reset(allocator, size);
     try context.backBuffer.renderInBuffer(allocator, el, size);
-    try context.backBuffer.writeToWriter(size, writer);
+    try writeDiff(allocator, context, size, writer);
 
-    context.state.rowOffset = @intCast(context.backBuffer.buffer.items.len / size.col);
+    try sequences.eraseDisplayAfterCursor(writer);
+
+    context.state.rowOffset = @as(i32, @intCast(context.backBuffer.lineLimit)) + 1;
     context.state.forceReRender = false;
 
     try writer.flush();
@@ -43,73 +44,34 @@ fn writeDiff(
     context: *contextMod.RenderContext,
     size: utils.WinSize,
     writer: *Writer,
-    first: bool,
 ) !void {
-    _ = first;
-    _ = allocator;
-    // var toLen: usize = self.buffer.items.len;
+    try context.frontBuffer.matchSize(allocator, context.backBuffer.lineLimit, size.col);
 
-    // if (backBuffer.buffer.items.len < self.buffer.items.len) {
-    //     self.buffer.items.len = backBuffer.buffer.items.len;
-    //     toLen = self.buffer.items.len;
-    // } else if (backBuffer.buffer.items.len > self.buffer.items.len) {
-    //     const slice = backBuffer.buffer.items[self.buffer.items.len..];
-    //     try self.buffer.appendSlice(allocator, slice);
-    // }
+    var atCol: usize = 0;
+    const frontBufferLines = context.frontBuffer.buffer.items[0..context.frontBuffer.lineLimit];
+    const backBufferLines = context.backBuffer.buffer.items[0..context.backBuffer.lineLimit];
+    for (frontBufferLines, backBufferLines) |*frontLine, *backLine| {
+        for (frontLine.items, backLine.items, 0..) |frontCell, backCell, cellIndex| {
+            if (context.state.forceReRender or !frontCell.compareTo(backCell)) {
+                if (atCol < cellIndex) {
+                    try sequences.setCursorCol(cellIndex + 1, writer);
+                }
 
-    for (context.backBuffer.buffer.items, 0..) |char, i| {
-        try matchRenderStyle(&context.frontBuffer.rendering, char.style, writer);
-        // if (first) {
-        //     try writer.writeAll(char.data.bytes[0..char.data.len]);
-        // } else {
-        try writer.writeByte('@');
-        // }
+                try matchRenderStyle(&context.frontBuffer.rendering, backCell.style, writer);
+                try writer.writeAll(backCell.data.bytes[0..backCell.data.len]);
 
-        if ((i + 1) % size.col == 0) {
-            try writer.writeByte('\n');
-            context.state.rowOffset += 1;
+                atCol += 1;
+            }
         }
+
+        @memcpy(frontLine.items, backLine.items);
+
+        try writer.writeByte('\n');
+        atCol = 0;
     }
-
-    // var i: usize = 0;
-    // var colAt: usize = 0;
-    // while (i < toLen) : (i += 1) {
-    //     if (state.forceReRender or
-    //         !self.buffer.items[i].compareTo(backBuffer.buffer.items[i]))
-    //     {
-    //         if (colAt < i) {
-    //             try sequences.setCursorCol(i, writer);
-    //         }
-
-    //         const item = backBuffer.buffer.items[i];
-    //         try self.matchRenderStyle(item.style, writer);
-    //         try writer.writeAll(item.data.bytes[0..item.data.len]);
-
-    //         colAt += 1;
-    //     }
-
-    //     if ((i + 1) % size.col == 0) {
-    //         try writer.writeByte('\n');
-    //         colAt = 0;
-    //     }
-    // }
-
-    // i = toLen;
-    // while (i < self.buffer.items.len) : (i += 1) {
-    //     const item = self.buffer.items[i];
-    //     try self.matchRenderStyle(item.style, writer);
-    //     try writer.writeAll(item.data.bytes[0..item.data.len]);
-
-    //     colAt += 1;
-
-    //     if ((i + 1) % size.col == 0) {
-    //         try writer.writeByte('\n');
-    //         colAt = 0;
-    //     }
-    // }
 }
 
-fn matchRenderStyle(
+pub fn matchRenderStyle(
     rendering: *stylesMod.SimpleDataStyle,
     styles: stylesMod.SimpleDataStyle,
     writer: *Writer,

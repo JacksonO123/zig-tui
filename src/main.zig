@@ -59,6 +59,7 @@ pub fn main(init: std.process.Init) !void {
     const waitMask = std.posix.sigemptyset();
 
     try sequences.disableAutoWrap(writer);
+
     if (app.mockConfig.fullscreen) {
         try sequences.setCursorPosAbsolute(1, 1, writer);
     }
@@ -71,16 +72,20 @@ pub fn main(init: std.process.Init) !void {
         size,
     );
 
-    const el = try app.renderUI(&renderContext.terminal);
-    try renderer.render(gpa, &renderContext, el, size, writer, true);
+    var count: usize = 0;
+
+    var el = try app.renderUI(&renderContext.terminal);
+    try renderer.render(gpa, &renderContext, el, size, writer, count);
 
     while (true) {
         _ = c.sigsuspend(@ptrCast(&waitMask));
 
         if (isResized.swap(false, .seq_cst)) {
+            count += 1;
             size = try utils.getWinSize();
-            try renderContext.onTerminalResize();
-            try renderer.render(gpa, &renderContext, el, size, writer, false);
+            try renderContext.onTerminalResize(size);
+            el = try app.renderUI(&renderContext.terminal);
+            try renderer.render(gpa, &renderContext, el, size, writer, count);
         }
     }
 }
