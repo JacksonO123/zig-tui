@@ -8,28 +8,18 @@ const app = @import("app.zig");
 const context = @import("context.zig");
 const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
-const terminalMod = @import("terminal.zig");
 const utils = @import("utils.zig");
 
-var ioGlobal: ?*std.Io = null;
-var isResized = std.atomic.Value(bool).init(false);
+var resizePipeWriteFd: std.posix.fd_t = -1;
 
 fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
     _ = sig;
-    isResized.store(true, .seq_cst);
-}
-
-fn sigIntHandler(sig: std.c.SIG) callconv(.c) void {
-    _ = sig;
-
-    var stdoutWriter = std.Io.File.stdout().writer(ioGlobal.?.*, &.{});
-    const stdout = &stdoutWriter.interface;
-    sequences.enableAutoWrap(stdout) catch {};
+    const byte: u8 = 1;
+    _ = std.c.write(resizePipeWriteFd, @ptrCast(&byte), 1);
 }
 
 pub fn main(init: std.process.Init) !void {
-    var io = init.io;
-    ioGlobal = &io;
+    const io = init.io;
     const gpa = init.gpa;
     const arena = init.arena;
     const globalArenaAllocator = arena.allocator();
@@ -38,6 +28,14 @@ pub fn main(init: std.process.Init) !void {
     var stdout = std.Io.File.stdout().writer(io, &stdoutBuf);
     const writer = &stdout.interface;
 
+    var resizeFds: [2]std.posix.fd_t = undefined;
+    if (std.c.pipe(&resizeFds) < 0) return error.PipeFailed;
+    defer _ = std.c.close(resizeFds[0]);
+    defer _ = std.c.close(resizeFds[1]);
+    try utils.setNonblocking(resizeFds[0]);
+    try utils.setNonblocking(resizeFds[1]);
+    resizePipeWriteFd = resizeFds[1];
+
     var action: std.posix.Sigaction = .{
         .handler = .{ .handler = sigWinchHandler },
         .mask = std.posix.sigemptyset(),
@@ -45,20 +43,20 @@ pub fn main(init: std.process.Init) !void {
     };
     std.posix.sigaction(std.posix.SIG.WINCH, &action, null);
 
-    var resetAction: std.posix.Sigaction = .{
-        .handler = .{ .handler = sigIntHandler },
-        .mask = std.posix.sigemptyset(),
-        .flags = 0,
+    const stdinFd = std.Io.File.stdin().handle;
+    var pollFds = [_]std.posix.pollfd{
+        .{ .fd = stdinFd, .events = std.posix.POLL.IN, .revents = 0 },
+        .{ .fd = resizeFds[0], .events = std.posix.POLL.IN, .revents = 0 },
     };
-    std.posix.sigaction(std.posix.SIG.INT, &resetAction, null);
 
-    var winchOnly = std.posix.sigemptyset();
-    std.posix.sigaddset(&winchOnly, std.posix.SIG.WINCH);
-    std.posix.sigprocmask(std.posix.SIG.BLOCK, &winchOnly, null);
-
-    const waitMask = std.posix.sigemptyset();
+    try utils.enableRawMode();
+    defer utils.disableRawMode();
 
     try sequences.disableAutoWrap(writer);
+    defer {
+        sequences.enableAutoWrap(writer) catch {};
+        writer.flush() catch {};
+    }
 
     if (app.mockConfig.fullscreen) {
         try sequences.setCursorPosAbsolute(1, 1, writer);
@@ -71,21 +69,43 @@ pub fn main(init: std.process.Init) !void {
         app.mockConfig,
         size,
     );
-
-    var count: usize = 0;
+    defer renderContext.deinit(gpa);
 
     var el = try app.renderUI(&renderContext.terminal);
-    try renderer.render(gpa, &renderContext, el, size, writer, count);
+    try renderer.render(gpa, &renderContext, el, size, writer);
 
     while (true) {
-        _ = c.sigsuspend(@ptrCast(&waitMask));
+        _ = try std.posix.poll(&pollFds, -1);
 
-        if (isResized.swap(false, .seq_cst)) {
-            count += 1;
+        if ((pollFds[1].revents & std.posix.POLL.IN) != 0) {
+            var drainBuf: [64]u8 = undefined;
+            while (true) {
+                _ = std.posix.read(resizeFds[0], &drainBuf) catch |err| switch (err) {
+                    error.WouldBlock => break,
+                    else => return err,
+                };
+            }
+
             size = try utils.getWinSize();
             try renderContext.onTerminalResize(size);
             el = try app.renderUI(&renderContext.terminal);
-            try renderer.render(gpa, &renderContext, el, size, writer, count);
+            try renderer.render(gpa, &renderContext, el, size, writer);
+        }
+
+        if ((pollFds[0].revents & std.posix.POLL.IN) != 0) {
+            var buf: [64]u8 = undefined;
+            const bytesRead = std.posix.read(stdinFd, &buf) catch |err| switch (err) {
+                error.WouldBlock => continue,
+                else => return err,
+            };
+
+            if (bytesRead == 0) continue;
+            for (buf[0..bytesRead]) |byte| {
+                switch (byte) {
+                    'q', 0x03 => return,
+                    else => {},
+                }
+            }
         }
     }
 }

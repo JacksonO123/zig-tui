@@ -56,11 +56,11 @@ pub const BackBuffer = struct {
     }
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
-        for (self.buffer.items) |line| {
+        for (self.buffer.items) |*line| {
             line.deinit(allocator);
         }
 
-        self.buffer.deinit();
+        self.buffer.deinit(allocator);
     }
 
     pub fn renderInBuffer(

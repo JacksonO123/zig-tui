@@ -16,9 +16,7 @@ pub fn render(
     el: ui.UIElement,
     size: utils.WinSize,
     writer: *Writer,
-    count: usize,
 ) !void {
-    _ = count;
     // TODO
     // if (context.config.fullscreen) {
     //     try sequences.clearScreen(writer);

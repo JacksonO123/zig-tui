@@ -19,6 +19,14 @@ pub const FrontBuffer = struct {
 
     pub const empty: Self = .{};
 
+    pub fn deinit(self: *Self, allocator: Allocator) void {
+        for (self.buffer.items) |*line| {
+            line.deinit(allocator);
+        }
+
+        self.buffer.deinit(allocator);
+    }
+
     pub fn matchSize(
         self: *Self,
         allocator: Allocator,

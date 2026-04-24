@@ -45,6 +45,7 @@ pub const RenderContext = struct {
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
         self.backBuffer.deinit(allocator);
+        self.frontBuffer.deinit(allocator);
     }
 
     pub fn onTerminalResize(self: *Self, size: utils.WinSize) !void {
