@@ -60,31 +60,39 @@ const ActiveState = enum {
     None,
 };
 
-const ElementBorderStyles = struct {
+pub const Color = enum {
     const Self = @This();
 
-    borderVariant: BorderStylesVariant = .None,
+    Black,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Magenta,
+    Cyan,
+    White,
+    None,
+};
 
-    pub fn getChars(self: Self) ?BorderChars {
-        return self.borderVariant.getChars();
-    }
+pub const StyleConfig = struct {
+    border: BorderStylesVariant = .None,
+    padding: struct {
+        paddingLeft: u16 = 0,
+        paddingRight: u16 = 0,
+        paddingTop: u16 = 0,
+        paddingBottom: u16 = 0,
+    } = .{},
+    boldState: ActiveState = .None,
+    underlineState: ActiveState = .None,
+    italicState: ActiveState = .None,
+    fg: Color = .None,
+    bg: Color = .None,
 };
 
 pub const Styles = struct {
     const Self = @This();
 
-    styles: struct {
-        border: ElementBorderStyles = .{},
-        padding: struct {
-            paddingLeft: u16 = 0,
-            paddingRight: u16 = 0,
-            paddingTop: u16 = 0,
-            paddingBottom: u16 = 0,
-        } = .{},
-        boldState: ActiveState = .None,
-        underlineState: ActiveState = .None,
-        italicState: ActiveState = .None,
-    } = .{},
+    styles: StyleConfig = .{},
 
     pub const default: Self = .{};
 
@@ -93,15 +101,27 @@ pub const Styles = struct {
             .bold = self.styles.boldState == .Active,
             .underline = self.styles.underlineState == .Active,
             .italic = self.styles.italicState == .Active,
+            .fg = self.styles.fg,
+            .bg = self.styles.bg,
         };
     }
 
     pub fn hasBorder(self: Self) bool {
-        return self.styles.border.borderVariant != .None;
+        return self.styles.border != .None;
+    }
+
+    pub fn fg(self: *Self, color: Color) *Self {
+        self.styles.fg = color;
+        return self;
+    }
+
+    pub fn bg(self: *Self, color: Color) *Self {
+        self.styles.bg = color;
+        return self;
     }
 
     pub fn border(self: *Self, style: BorderStylesVariant) *Self {
-        self.styles.border.borderVariant = style;
+        self.styles.border = style;
         return self;
     }
 
@@ -165,4 +185,6 @@ pub const SimpleDataStyle = struct {
     bold: bool = false,
     underline: bool = false,
     italic: bool = false,
+    fg: Color = .None,
+    bg: Color = .None,
 };

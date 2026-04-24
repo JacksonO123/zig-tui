@@ -3,6 +3,7 @@ const Writer = std.Io.Writer;
 
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
+const stylesMod = @import("styles.zig");
 
 const Codes = struct {
     const Str = []const u8;
@@ -118,4 +119,34 @@ pub fn moveCursorUp(amount: usize, writer: *Writer) !void {
 
 pub fn moveCursorDown(amount: usize, writer: *Writer) !void {
     try writer.print(codes.moveCursorDown, .{amount});
+}
+
+pub fn setFgFromColor(color: stylesMod.Color, writer: *Writer) !void {
+    const code = switch (color) {
+        .Black => "\x1b[30m",
+        .Red => "\x1b[31m",
+        .Green => "\x1b[32m",
+        .Yellow => "\x1b[33m",
+        .Blue => "\x1b[34m",
+        .Magenta => "\x1b[35m",
+        .Cyan => "\x1b[36m",
+        .White => "\x1b[37m",
+        .None => "\x1b[39m",
+    };
+    try writer.writeAll(code);
+}
+
+pub fn setBgFromColor(color: stylesMod.Color, writer: *Writer) !void {
+    const code = switch (color) {
+        .Black => "\x1b[40m",
+        .Red => "\x1b[41m",
+        .Green => "\x1b[42m",
+        .Yellow => "\x1b[43m",
+        .Blue => "\x1b[44m",
+        .Magenta => "\x1b[45m",
+        .Cyan => "\x1b[46m",
+        .White => "\x1b[47m",
+        .None => "\x1b[49m",
+    };
+    try writer.writeAll(code);
 }

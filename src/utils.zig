@@ -3,17 +3,20 @@ const Allocator = std.mem.Allocator;
 
 const backBufferMod = @import("back_buffer.zig");
 
-pub const WinSize = struct { row: u16, col: u16 };
-pub const Pos = WinSize;
+pub const Size = struct {
+    height: u16 = 0,
+    width: u16 = 0,
+};
+pub const Pos = Size;
 
-pub fn getWinSize() !WinSize {
-    var winsize: std.posix.winsize = undefined;
+pub fn getWinSize() !Size {
+    var winSize: std.posix.winsize = undefined;
     const fd = std.Io.File.stdout().handle;
-    const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winsize));
+    const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winSize));
     if (std.posix.errno(err) != .SUCCESS) {
         return error.IoctlFailed;
     }
-    return .{ .row = winsize.row, .col = winsize.col };
+    return .{ .height = winSize.row, .width = winSize.col };
 }
 
 var savedTermios: ?std.posix.termios = null;

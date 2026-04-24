@@ -14,7 +14,7 @@ pub fn render(
     allocator: Allocator,
     context: *RenderContext,
     el: ui.UIElement,
-    size: utils.WinSize,
+    size: utils.Size,
     writer: *Writer,
 ) !void {
     // TODO
@@ -40,10 +40,10 @@ pub fn render(
 fn writeDiff(
     allocator: Allocator,
     context: *contextMod.RenderContext,
-    size: utils.WinSize,
+    size: utils.Size,
     writer: *Writer,
 ) !void {
-    try context.frontBuffer.matchSize(allocator, context.backBuffer.lineLimit, size.col);
+    try context.frontBuffer.matchSize(allocator, context.backBuffer.lineLimit, size.width);
 
     var atCol: usize = 0;
     const frontBufferLines = context.frontBuffer.buffer.items[0..context.frontBuffer.lineLimit];
@@ -97,6 +97,16 @@ pub fn matchRenderStyle(
         sequences.disableItalicText,
         writer,
     );
+
+    if (rendering.fg != styles.fg) {
+        try sequences.setFgFromColor(styles.fg, writer);
+        rendering.fg = styles.fg;
+    }
+
+    if (rendering.bg != styles.bg) {
+        try sequences.setBgFromColor(styles.bg, writer);
+        rendering.bg = styles.bg;
+    }
 }
 
 pub fn updateSpecificRenderStyle(

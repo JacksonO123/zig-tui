@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const exe = b.addExecutable(.{
+        .use_llvm = true,
         .name = "zig_tui",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),

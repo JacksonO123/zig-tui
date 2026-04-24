@@ -8,9 +8,9 @@ pub const Terminal = struct {
     const Self = @This();
 
     allocator: Allocator,
-    size: utils.WinSize,
+    size: utils.Size,
 
-    pub inline fn init(allocator: Allocator, size: utils.WinSize) Self {
+    pub inline fn init(allocator: Allocator, size: utils.Size) Self {
         return .{
             .allocator = allocator,
             .size = size,

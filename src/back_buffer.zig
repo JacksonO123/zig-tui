@@ -26,10 +26,10 @@ pub const BackBuffer = struct {
 
     pub inline fn init(
         allocator: Allocator,
-        size: utils.WinSize,
+        size: utils.Size,
     ) !Self {
         var lines: bufferUtil.CharBuffer = .empty;
-        const line = try bufferUtil.createLine(allocator, size.col);
+        const line = try bufferUtil.createLine(allocator, size.width);
         try lines.append(allocator, line);
 
         return .{
@@ -45,10 +45,10 @@ pub const BackBuffer = struct {
     pub fn reset(
         self: *Self,
         allocator: Allocator,
-        size: utils.WinSize,
+        size: utils.Size,
     ) !void {
         for (self.buffer.items) |*line| {
-            try bufferUtil.prepareLineBuffer(allocator, line, size.col, .All);
+            try bufferUtil.prepareLineBuffer(allocator, line, size.width, .All);
         }
 
         self.lineLimit = 1;
@@ -67,14 +67,34 @@ pub const BackBuffer = struct {
         self: *Self,
         allocator: Allocator,
         element: ui.UIElement,
-        size: utils.WinSize,
+        size: utils.Size,
     ) !void {
         const trueStart = self.pos;
 
-        self.renderStylesPreAdjust(element.styles);
+        const preAdjust = getPreAdjustment(element.styles);
+        const postAdjust = getPostAdjustment(element.styles);
+        self.pos.x += preAdjust.width;
+        self.pos.y += preAdjust.height;
 
         const startPos = self.pos;
         const simpleStyles = element.styles.toSimpleStyles();
+
+        const elSize = getElementDimensions(element);
+
+        {
+            try self.ensureLineExists(allocator, trueStart.y + elSize.height, size.width);
+            var styleCpy = simpleStyles;
+            styleCpy.underline = false;
+            for (self.buffer.items[trueStart.y .. trueStart.y + elSize.height - 1]) |line| {
+                @memset(line.items[trueStart.x .. trueStart.x + elSize.width], .{
+                    .data = .{
+                        .bytes = "    ".*,
+                        .len = 1,
+                    },
+                    .style = styleCpy,
+                });
+            }
+        }
 
         switch (element.variant) {
             .Text => |text| {
@@ -121,65 +141,97 @@ pub const BackBuffer = struct {
             },
         }
 
+        self.pos.x += postAdjust.width;
+        self.pos.y += postAdjust.height;
+        try self.ensureLineExists(allocator, self.pos.y, size.width);
         try self.renderStylesPost(allocator, trueStart, element.styles, size);
-    }
-
-    fn renderStylesPreAdjust(self: *Self, styles: stylesMod.Styles) void {
-        if (styles.hasBorder()) {
-            self.pos.x += 1;
-            self.pos.y += 1;
-        }
-
-        self.pos.x += styles.styles.padding.paddingLeft;
-        self.pos.y += styles.styles.padding.paddingTop;
-    }
-
-    fn renderStylesPostAdjust(self: *Self, styles: stylesMod.Styles) void {
-        if (styles.hasBorder()) {
-            self.pos.x += 1;
-            self.pos.y += 1;
-        }
-
-        self.pos.x += styles.styles.padding.paddingRight;
-        self.pos.y += styles.styles.padding.paddingBottom;
     }
 
     fn renderStylesPost(
         self: *Self,
         allocator: Allocator,
-        start: BackBufferPos,
+        startPos: BackBufferPos,
         styles: stylesMod.Styles,
-        size: utils.WinSize,
+        size: utils.Size,
     ) !void {
-        self.renderStylesPostAdjust(styles);
-
-        var pos = start;
+        var pos = startPos;
         if (styles.styles.border.getChars()) |borderStyles| {
-            try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.corners.topLeft);
+            var simpleStyles = styles.toSimpleStyles();
+            simpleStyles.underline = false;
+
+            // if (styles.styles.padding.paddingLeft > 0) {
+            //     for (self.buffer.items[startPos.y + 1 .. self.pos.y]) |line| {
+            //         @memset(line.items[startPos.x + 1 .. self.pos.x], .{
+            //             .data = .{
+            //                 .bytes = "@   ".*,
+            //                 .len = 1,
+            //             },
+            //             .style = .{},
+            //         });
+            //     }
+            // }
+
+            try self.writeUnicodeAtPos(
+                allocator,
+                size,
+                pos,
+                borderStyles.corners.topLeft,
+                simpleStyles,
+            );
             pos.x = self.pos.x - 1;
-            try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.corners.topRight);
-            pos.x = start.x;
+            try self.writeUnicodeAtPos(
+                allocator,
+                size,
+                pos,
+                borderStyles.corners.topRight,
+                simpleStyles,
+            );
+            pos.x = startPos.x;
             pos.y = self.pos.y;
-            try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.corners.bottomLeft);
+            try self.writeUnicodeAtPos(
+                allocator,
+                size,
+                pos,
+                borderStyles.corners.bottomLeft,
+                simpleStyles,
+            );
             pos.x = self.pos.x - 1;
-            try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.corners.bottomRight);
-            pos.y = start.y;
-            pos.x = start.x + 1;
+            try self.writeUnicodeAtPos(
+                allocator,
+                size,
+                pos,
+                borderStyles.corners.bottomRight,
+                simpleStyles,
+            );
+            pos.y = startPos.y;
+            pos.x = startPos.x + 1;
 
             const diffX = self.pos.x - pos.x - 1;
             var i: usize = 0;
             while (i < diffX) : (i += 1) {
                 const prev = pos.y;
 
-                try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.horizontal);
+                try self.writeUnicodeAtPos(
+                    allocator,
+                    size,
+                    pos,
+                    borderStyles.horizontal,
+                    simpleStyles,
+                );
                 pos.y = self.pos.y;
-                try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.horizontal);
+                try self.writeUnicodeAtPos(
+                    allocator,
+                    size,
+                    pos,
+                    borderStyles.horizontal,
+                    simpleStyles,
+                );
                 pos.y = prev;
 
                 pos.x += 1;
             }
 
-            pos.x = start.x;
+            pos.x = startPos.x;
             pos.y += 1;
 
             i = 0;
@@ -187,25 +239,65 @@ pub const BackBuffer = struct {
             while (i < diffY) : (i += 1) {
                 const prev = pos.x;
 
-                try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.vertical);
+                try self.writeUnicodeAtPos(
+                    allocator,
+                    size,
+                    pos,
+                    borderStyles.vertical,
+                    simpleStyles,
+                );
                 pos.x = self.pos.x - 1;
-                try self.writeUnicodeAtPos(allocator, size, pos, borderStyles.vertical);
+                try self.writeUnicodeAtPos(
+                    allocator,
+                    size,
+                    pos,
+                    borderStyles.vertical,
+                    simpleStyles,
+                );
                 pos.x = prev;
 
                 pos.y += 1;
             }
+
+            // if (styles.styles.padding.paddingTop > 0) {
+            //     const from = startPos.y + 1;
+            //     const to = startPos.y + styles.styles.padding.paddingTop + 1;
+            //     for (self.buffer.items[from..to]) |line| {
+            //         @memset(line.items[startPos.x + 1 .. self.pos.x - 1], .{
+            //             .data = .{
+            //                 .bytes = "    ".*,
+            //                 .len = 1,
+            //             },
+            //             .style = simpleStyles,
+            //         });
+            //     }
+            // }
+
+            // if (styles.styles.padding.paddingBottom > 0) {
+            //     const from = self.pos.y - styles.styles.padding.paddingBottom;
+            //     const to = self.pos.y;
+            //     for (self.buffer.items[from..to]) |line| {
+            //         @memset(line.items[startPos.x + 1 .. self.pos.x - 1], .{
+            //             .data = .{
+            //                 .bytes = "    ".*,
+            //                 .len = 1,
+            //             },
+            //             .style = simpleStyles,
+            //         });
+            //     }
+            // }
         }
     }
 
     fn writeCharAtPos(
         self: *Self,
         allocator: Allocator,
-        size: utils.WinSize,
+        size: utils.Size,
         pos: BackBufferPos,
         char: u8,
         styles: stylesMod.SimpleDataStyle,
     ) !void {
-        try self.ensureLineExists(allocator, pos.y, size.col);
+        try self.ensureLineExists(allocator, pos.y, size.width);
         const line = self.buffer.items[pos.y];
         if (pos.x >= line.items.len) return;
         var cell = &line.items[pos.x];
@@ -218,17 +310,19 @@ pub const BackBuffer = struct {
     fn writeUnicodeAtPos(
         self: *Self,
         allocator: Allocator,
-        size: utils.WinSize,
+        size: utils.Size,
         pos: BackBufferPos,
         chars: []const u8,
+        styles: stylesMod.SimpleDataStyle,
     ) !void {
-        try self.ensureLineExists(allocator, pos.y, size.col);
+        try self.ensureLineExists(allocator, pos.y, size.width);
         const line = self.buffer.items[pos.y];
         if (pos.x >= line.items.len) return;
         var cell = &line.items[pos.x];
 
         @memcpy(cell.data.bytes[0..chars.len], chars);
         cell.data.len = @intCast(chars.len);
+        cell.style = styles;
     }
 
     fn ensureLineExists(self: *Self, allocator: Allocator, lineIndex: usize, width: usize) !void {
@@ -244,3 +338,80 @@ pub const BackBuffer = struct {
         self.lineLimit = lineIndex + 1;
     }
 };
+
+fn getElementDimensions(element: ui.UIElement) utils.Size {
+    var size: utils.Size = .{ .height = 1 };
+
+    const preAdjust = getPreAdjustment(element.styles);
+    const postAdjust = getPostAdjustment(element.styles);
+
+    switch (element.variant) {
+        .Text => |text| {
+            var currentX: u16 = 0;
+            for (text.data) |char| {
+                if (char == '\n') {
+                    size.height += 1;
+                    currentX = 0;
+                    continue;
+                }
+
+                currentX += 1;
+                size.width = @max(size.width, currentX);
+            }
+
+            size.width += preAdjust.width + postAdjust.width;
+            size.height += preAdjust.height + postAdjust.height;
+        },
+        .Layout => |layout| {
+            size.width += preAdjust.width + postAdjust.width;
+            size.height += preAdjust.height + postAdjust.height;
+
+            switch (layout) {
+                .Horizontal => |elements| {
+                    for (elements) |el| {
+                        const elSize = getElementDimensions(el);
+                        size.width += elSize.width;
+                        size.height = @max(size.height, elSize.height);
+                    }
+                },
+                .Vertical => |elements| {
+                    for (elements) |el| {
+                        const elSize = getElementDimensions(el);
+                        size.height += elSize.height;
+                        size.width = @max(size.width, elSize.width);
+                    }
+                },
+            }
+        },
+    }
+
+    return size;
+}
+
+fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {
+    var adjustment: utils.Size = .{};
+
+    if (styles.hasBorder()) {
+        adjustment.width += 1;
+        adjustment.height += 1;
+    }
+
+    adjustment.width += styles.styles.padding.paddingLeft;
+    adjustment.height += styles.styles.padding.paddingTop;
+
+    return adjustment;
+}
+
+fn getPostAdjustment(styles: stylesMod.Styles) utils.Size {
+    var adjustment: utils.Size = .{};
+
+    if (styles.hasBorder()) {
+        adjustment.width += 1;
+        adjustment.height += 1;
+    }
+
+    adjustment.width += styles.styles.padding.paddingRight;
+    adjustment.height += styles.styles.padding.paddingBottom;
+
+    return adjustment;
+}
