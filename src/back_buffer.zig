@@ -104,10 +104,17 @@ pub const BackBuffer = struct {
                         self.pos.y = maxY;
                     },
                     .Vertical => |elements| {
-                        for (elements) |el| {
+                        var maxX = startPos.x;
+                        for (elements, 0..) |el, index| {
                             try self.renderInBuffer(allocator, el, size);
-                            self.pos.y += 1;
-                            self.pos.x = startPos.x;
+                            maxX = @max(maxX, self.pos.x);
+
+                            if (index < elements.len - 1) {
+                                self.pos.y += 1;
+                                self.pos.x = startPos.x;
+                            } else {
+                                self.pos.x = maxX;
+                            }
                         }
                     },
                 }

@@ -28,7 +28,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !ui.UIElement {
     const topRow = try ui.Layout.fromElements(
         allocator,
         &[_]ui.UIElement{ wBox, hBox, aBox },
-        .Horizontal,
+        if (terminal.size.col % 2 == 0) .Vertical else .Horizontal,
     );
 
     var block = ui.Text.fromConstText("line one\nline two is longer\nthird");
@@ -48,7 +48,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !ui.UIElement {
     return try ui.Layout.fromElements(
         allocator,
         &[_]ui.UIElement{ topRow, block, bottomRow },
-        .Vertical,
+        if (terminal.size.col % 2 == 0) .Horizontal else .Vertical,
     );
 }
 
