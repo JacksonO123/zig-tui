@@ -33,7 +33,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !ui.UIElement {
     );
 
     var block = ui.Text.fromConstText("line one\nline two is longer\nthird");
-    _ = block.styles.border(.Square).padding(1).bold().bg(.Blue);
+    _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
 
     const plain = ui.Text.fromConstText("plain text, no styles");
 

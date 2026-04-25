@@ -82,10 +82,10 @@ pub const BackBuffer = struct {
         const elSize = getElementDimensions(element);
 
         {
-            try self.ensureLineExists(allocator, trueStart.y + elSize.height - 1, size.width);
+            try self.ensureLineExists(allocator, trueStart.y + elSize.height, size.width);
             var styleCpy = simpleStyles;
             styleCpy.underline = false;
-            for (self.buffer.items[trueStart.y .. trueStart.y + elSize.height - 1]) |line| {
+            for (self.buffer.items[trueStart.y .. trueStart.y + elSize.height]) |line| {
                 @memset(line.items[trueStart.x .. trueStart.x + elSize.width], .{
                     .data = .{
                         .bytes = "    ".*,
