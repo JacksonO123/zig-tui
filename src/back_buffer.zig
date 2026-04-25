@@ -82,7 +82,7 @@ pub const BackBuffer = struct {
         const elSize = getElementDimensions(element);
 
         {
-            try self.ensureLineExists(allocator, trueStart.y + elSize.height, size.width);
+            try self.ensureLineExists(allocator, trueStart.y + elSize.height - 1, size.width);
             var styleCpy = simpleStyles;
             styleCpy.underline = false;
             for (self.buffer.items[trueStart.y .. trueStart.y + elSize.height - 1]) |line| {
@@ -158,18 +158,6 @@ pub const BackBuffer = struct {
         if (styles.styles.border.getChars()) |borderStyles| {
             var simpleStyles = styles.toSimpleStyles();
             simpleStyles.underline = false;
-
-            // if (styles.styles.padding.paddingLeft > 0) {
-            //     for (self.buffer.items[startPos.y + 1 .. self.pos.y]) |line| {
-            //         @memset(line.items[startPos.x + 1 .. self.pos.x], .{
-            //             .data = .{
-            //                 .bytes = "@   ".*,
-            //                 .len = 1,
-            //             },
-            //             .style = .{},
-            //         });
-            //     }
-            // }
 
             try self.writeUnicodeAtPos(
                 allocator,
@@ -258,34 +246,6 @@ pub const BackBuffer = struct {
 
                 pos.y += 1;
             }
-
-            // if (styles.styles.padding.paddingTop > 0) {
-            //     const from = startPos.y + 1;
-            //     const to = startPos.y + styles.styles.padding.paddingTop + 1;
-            //     for (self.buffer.items[from..to]) |line| {
-            //         @memset(line.items[startPos.x + 1 .. self.pos.x - 1], .{
-            //             .data = .{
-            //                 .bytes = "    ".*,
-            //                 .len = 1,
-            //             },
-            //             .style = simpleStyles,
-            //         });
-            //     }
-            // }
-
-            // if (styles.styles.padding.paddingBottom > 0) {
-            //     const from = self.pos.y - styles.styles.padding.paddingBottom;
-            //     const to = self.pos.y;
-            //     for (self.buffer.items[from..to]) |line| {
-            //         @memset(line.items[startPos.x + 1 .. self.pos.x - 1], .{
-            //             .data = .{
-            //                 .bytes = "    ".*,
-            //                 .len = 1,
-            //             },
-            //             .style = simpleStyles,
-            //         });
-            //     }
-            // }
         }
     }
 
@@ -375,6 +335,10 @@ fn getElementDimensions(element: ui.UIElement) utils.Size {
                     }
                 },
                 .Vertical => |elements| {
+                    if (elements.len > 0) {
+                        size.height = 0;
+                    }
+
                     for (elements) |el| {
                         const elSize = getElementDimensions(el);
                         size.height += elSize.height;
