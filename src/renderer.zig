@@ -29,6 +29,9 @@ pub fn render(
     try context.backBuffer.renderInBuffer(allocator, el, size);
     try writeDiff(allocator, context, size, writer);
 
+    try sequences.resetStyles(writer);
+    context.backBuffer.rendering = .{};
+    context.frontBuffer.rendering = .{};
     try sequences.eraseDisplayAfterCursor(writer);
 
     context.state.rowOffset = @as(i32, @intCast(context.backBuffer.lineLimit)) + 1;
@@ -64,6 +67,8 @@ fn writeDiff(
 
         @memcpy(frontLine.items, backLine.items);
 
+        try sequences.setBgFromColor(.None, writer);
+        context.frontBuffer.rendering.bg = .None;
         try writer.writeByte('\n');
         atCol = 0;
     }

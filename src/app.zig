@@ -23,7 +23,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !ui.UIElement {
     _ = hBox.styles.border(.Square).paddingX(1).bold().fg(.Blue);
 
     var aBox = ui.Text.fromConstText(areaText);
-    _ = aBox.styles.border(.Rounded).paddingX(1).underline().fg(.Red);
+    _ = aBox.styles.border(.Rounded).paddingX(1).underline().fg(.Black).bg(.Red);
 
     const topRow = try ui.Layout.fromElements(
         allocator,
