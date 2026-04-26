@@ -86,13 +86,16 @@ pub const BackBuffer = struct {
             var styleCpy = simpleStyles;
             styleCpy.underline = false;
             for (self.buffer.items[trueStart.y .. trueStart.y + elSize.height]) |line| {
-                @memset(line.items[trueStart.x .. trueStart.x + elSize.width], .{
-                    .data = .{
-                        .bytes = "    ".*,
-                        .len = 1,
-                    },
-                    .style = styleCpy,
-                });
+                if (trueStart.x < size.width) {
+                    const to = @min(trueStart.x + elSize.width, size.width);
+                    @memset(line.items[trueStart.x..to], .{
+                        .data = .{
+                            .bytes = "    ".*,
+                            .len = 1,
+                        },
+                        .style = styleCpy,
+                    });
+                }
             }
         }
 

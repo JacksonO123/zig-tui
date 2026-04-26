@@ -17,11 +17,10 @@ pub fn render(
     size: utils.Size,
     writer: *Writer,
 ) !void {
-    // TODO
-    // if (context.config.fullscreen) {
-    //     try sequences.clearScreen(writer);
-    //     try sequences.setCursorPosAbsolute(1, 1, writer);
-    // }
+    if (context.config.fullscreen) {
+        try sequences.clearScreen(writer);
+        try sequences.setCursorPosAbsolute(1, 1, writer);
+    }
 
     try sequences.setCursorPos(context, 1, 1, writer);
 
