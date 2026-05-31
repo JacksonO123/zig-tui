@@ -88,6 +88,7 @@ pub fn main(init: std.process.Init) !void {
 
             size = try utils.getWinSize();
             try renderContext.onTerminalResize(size);
+            renderContext.prepareForReRender();
             el = try app.renderUI(&renderContext.terminal);
             try renderer.render(gpa, &renderContext, el, size, writer);
         }

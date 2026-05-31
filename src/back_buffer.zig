@@ -66,28 +66,26 @@ pub const BackBuffer = struct {
     pub fn renderInBuffer(
         self: *Self,
         allocator: Allocator,
-        element: ui.UIElement,
+        element: *ui.UIElement,
         size: utils.Size,
     ) !void {
         const trueStart = self.pos;
 
-        const preAdjust = getPreAdjustment(element.styles);
-        const postAdjust = getPostAdjustment(element.styles);
+        const preAdjust = ui.getPreAdjustment(element.styles);
+        const postAdjust = ui.getPostAdjustment(element.styles);
         self.pos.x += preAdjust.width;
         self.pos.y += preAdjust.height;
 
         const startPos = self.pos;
         const simpleStyles = element.styles.toSimpleStyles();
 
-        const elSize = getElementDimensions(element);
-
         {
-            try self.ensureLineExists(allocator, trueStart.y + elSize.height, size.width);
+            try self.ensureLineExists(allocator, trueStart.y + element.size.height, size.width);
             var styleCpy = simpleStyles;
             styleCpy.underline = false;
-            for (self.buffer.items[trueStart.y .. trueStart.y + elSize.height]) |line| {
+            for (self.buffer.items[trueStart.y .. trueStart.y + element.size.height]) |line| {
                 if (trueStart.x < size.width) {
-                    const to = @min(trueStart.x + elSize.width, size.width);
+                    const to = @min(trueStart.x + element.size.width, size.width);
                     @memset(line.items[trueStart.x..to], .{
                         .data = .{
                             .bytes = "    ".*,
@@ -301,84 +299,3 @@ pub const BackBuffer = struct {
         self.lineLimit = lineIndex + 1;
     }
 };
-
-fn getElementDimensions(element: ui.UIElement) utils.Size {
-    var size: utils.Size = .{ .height = 1 };
-
-    const preAdjust = getPreAdjustment(element.styles);
-    const postAdjust = getPostAdjustment(element.styles);
-
-    switch (element.variant) {
-        .Text => |text| {
-            var currentX: u16 = 0;
-            for (text.data) |char| {
-                if (char == '\n') {
-                    size.height += 1;
-                    currentX = 0;
-                    continue;
-                }
-
-                currentX += 1;
-                size.width = @max(size.width, currentX);
-            }
-
-            size.width += preAdjust.width + postAdjust.width;
-            size.height += preAdjust.height + postAdjust.height;
-        },
-        .Layout => |layout| {
-            size.width += preAdjust.width + postAdjust.width;
-            size.height += preAdjust.height + postAdjust.height;
-
-            switch (layout) {
-                .Horizontal => |elements| {
-                    for (elements) |el| {
-                        const elSize = getElementDimensions(el);
-                        size.width += elSize.width;
-                        size.height = @max(size.height, elSize.height);
-                    }
-                },
-                .Vertical => |elements| {
-                    if (elements.len > 0) {
-                        size.height = 0;
-                    }
-
-                    for (elements) |el| {
-                        const elSize = getElementDimensions(el);
-                        size.height += elSize.height;
-                        size.width = @max(size.width, elSize.width);
-                    }
-                },
-            }
-        },
-    }
-
-    return size;
-}
-
-fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {
-    var adjustment: utils.Size = .{};
-
-    if (styles.hasBorder()) {
-        adjustment.width += 1;
-        adjustment.height += 1;
-    }
-
-    adjustment.width += styles.styles.padding.paddingLeft;
-    adjustment.height += styles.styles.padding.paddingTop;
-
-    return adjustment;
-}
-
-fn getPostAdjustment(styles: stylesMod.Styles) utils.Size {
-    var adjustment: utils.Size = .{};
-
-    if (styles.hasBorder()) {
-        adjustment.width += 1;
-        adjustment.height += 1;
-    }
-
-    adjustment.width += styles.styles.padding.paddingRight;
-    adjustment.height += styles.styles.padding.paddingBottom;
-
-    return adjustment;
-}

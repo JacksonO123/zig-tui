@@ -13,7 +13,7 @@ const bufferUtil = @import("buffer.zig");
 pub fn render(
     allocator: Allocator,
     context: *RenderContext,
-    el: ui.UIElement,
+    el: *ui.UIElement,
     size: utils.Size,
     writer: *Writer,
 ) !void {
@@ -25,6 +25,7 @@ pub fn render(
     try sequences.setCursorPos(context, 1, 1, writer);
 
     try context.backBuffer.reset(allocator, size);
+    ui.setElementDimensions(el);
     try context.backBuffer.renderInBuffer(allocator, el, size);
     try writeDiff(allocator, context, size, writer);
 

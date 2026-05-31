@@ -54,4 +54,8 @@ pub const RenderContext = struct {
             self.state.forceReRender = true;
         }
     }
+
+    pub fn prepareForReRender(self: *Self) void {
+        _ = self.terminalArena.reset(.retain_capacity);
+    }
 };
