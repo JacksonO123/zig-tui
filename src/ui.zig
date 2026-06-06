@@ -32,11 +32,6 @@ pub const UIElement = struct {
     }
 };
 
-const LayoutTypes = enum {
-    Vertical,
-    Horizontal,
-};
-
 pub const Text = struct {
     const Self = @This();
 
@@ -52,6 +47,35 @@ pub const Text = struct {
     }
 };
 
+const ConstraintTypes = enum {
+    Ratio,
+    Percent,
+    Value,
+    Min,
+    Max,
+};
+
+const Constraint = union(ConstraintTypes) {
+    Ratio: struct {
+        numerator: u16,
+        denominator: u16,
+    },
+    Percent: f32,
+    Value: u16,
+    Min: u16,
+    Max: u16,
+};
+
+const LayoutTypes = enum {
+    Vertical,
+    Horizontal,
+};
+
+const LayoutUtil = struct {
+    elements: []const *UIElement,
+    constraints: []Constraint,
+};
+
 pub const Layout = union(LayoutTypes) {
     const Self = @This();
 
@@ -61,13 +85,50 @@ pub const Layout = union(LayoutTypes) {
     pub fn fromElements(
         allocator: Allocator,
         elements: []const *UIElement,
-        dir: LayoutTypes,
+        direction: LayoutTypes,
     ) !*UIElement {
         const slice = try allocator.dupe(*UIElement, elements);
 
-        const layout: Self = switch (dir) {
-            .Vertical => .{ .Vertical = slice },
-            .Horizontal => .{ .Horizontal = slice },
+        const layout: Self = switch (direction) {
+            .Vertical => .{
+                .Vertical = .{
+                    .elements = slice,
+                    .constraints = &.{},
+                },
+            },
+            .Horizontal => .{
+                .Horizontal = .{
+                    .elements = slice,
+                    .constraints = &.{},
+                },
+            },
+        };
+        const el = UIElement.fromVariant(.{ .Layout = layout });
+        return el.alloc(allocator);
+    }
+
+    pub fn fromElementsAndConstraints(
+        allocator: Allocator,
+        elements: []const *UIElement,
+        constraints: []Constraint,
+        direction: LayoutTypes,
+    ) !*UIElement {
+        const elementSlice = try allocator.dupe(*UIElement, elements);
+        const constraintSlice = try allocator.dupe(Constraint, constraints);
+
+        const layout: Self = switch (direction) {
+            .Vertical => .{
+                .Vertical = .{
+                    .elements = elementSlice,
+                    .constraints = constraintSlice,
+                },
+            },
+            .Horizontal => .{
+                .Horizontal = .{
+                    .elements = elementSlice,
+                    .constraints = constraintSlice,
+                },
+            },
         };
         const el = UIElement.fromVariant(.{ .Layout = layout });
         return el.alloc(allocator);
