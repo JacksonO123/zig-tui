@@ -7,7 +7,11 @@ pub const Size = struct {
     height: u16 = 0,
     width: u16 = 0,
 };
-pub const Pos = Size;
+
+pub const Pos = struct {
+    x: u16 = 0,
+    y: u16 = 0,
+};
 
 pub fn getWinSize() !Size {
     var winSize: std.posix.winsize = undefined;

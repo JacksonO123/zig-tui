@@ -4,6 +4,13 @@ const Allocator = std.mem.Allocator;
 const stylesMod = @import("styles.zig");
 const utils = @import("utils.zig");
 
+pub const ElementLayoutInfo = struct {
+    width: u16 = 0,
+    height: u16 = 1,
+    x: u16 = 0,
+    y: u16 = 0,
+};
+
 pub const UIElementTypes = enum {
     Text,
     Layout,
@@ -17,7 +24,7 @@ pub const UIElementVariant = union(UIElementTypes) {
 pub const UIElement = struct {
     const Self = @This();
 
-    size: utils.Size = .{},
+    layoutInfo: ElementLayoutInfo = .{},
     styles: stylesMod.Styles = .default,
     variant: UIElementVariant,
 
@@ -53,9 +60,10 @@ const ConstraintTypes = enum {
     Value,
     Min,
     Max,
+    None,
 };
 
-const Constraint = union(ConstraintTypes) {
+const ConstraintValues = union(ConstraintTypes) {
     Ratio: struct {
         numerator: u16,
         denominator: u16,
@@ -64,6 +72,12 @@ const Constraint = union(ConstraintTypes) {
     Value: u16,
     Min: u16,
     Max: u16,
+    None,
+};
+
+const Constraint = struct {
+    width: ConstraintValues = .None,
+    height: ConstraintValues = .None,
 };
 
 const LayoutTypes = enum {
@@ -72,45 +86,38 @@ const LayoutTypes = enum {
 };
 
 const LayoutUtil = struct {
+    const Self = @This();
+
     elements: []const *UIElement,
     constraints: []Constraint,
+
+    pub fn getConstraint(self: Self, index: usize) ?Constraint {
+        if (index < self.constraints.len) {
+            return self.constraints[index];
+        }
+
+        return null;
+    }
 };
 
 pub const Layout = union(LayoutTypes) {
     const Self = @This();
 
-    Vertical: []const *UIElement,
-    Horizontal: []const *UIElement,
+    Vertical: LayoutUtil,
+    Horizontal: LayoutUtil,
 
     pub fn fromElements(
         allocator: Allocator,
         elements: []const *UIElement,
         direction: LayoutTypes,
     ) !*UIElement {
-        const slice = try allocator.dupe(*UIElement, elements);
-
-        const layout: Self = switch (direction) {
-            .Vertical => .{
-                .Vertical = .{
-                    .elements = slice,
-                    .constraints = &.{},
-                },
-            },
-            .Horizontal => .{
-                .Horizontal = .{
-                    .elements = slice,
-                    .constraints = &.{},
-                },
-            },
-        };
-        const el = UIElement.fromVariant(.{ .Layout = layout });
-        return el.alloc(allocator);
+        return fromElementsAndConstraints(allocator, elements, &.{}, direction);
     }
 
     pub fn fromElementsAndConstraints(
         allocator: Allocator,
         elements: []const *UIElement,
-        constraints: []Constraint,
+        constraints: []const Constraint,
         direction: LayoutTypes,
     ) !*UIElement {
         const elementSlice = try allocator.dupe(*UIElement, elements);
@@ -133,10 +140,24 @@ pub const Layout = union(LayoutTypes) {
         const el = UIElement.fromVariant(.{ .Layout = layout });
         return el.alloc(allocator);
     }
+
+    pub fn getConstraint(self: Self, index: usize) ?Constraint {
+        return switch (self) {
+            .Horizontal => |layout| layout.getConstraint(index),
+            .Vertical => |layout| layout.getConstraint(index),
+        };
+    }
 };
 
-pub fn setElementDimensions(element: *UIElement) void {
-    var size: utils.Size = .{ .height = 1 };
+pub fn setElementDimensions(
+    element: *UIElement,
+    sizeConstraint: utils.Size,
+    writePos: utils.Pos,
+) void {
+    var elInfo: ElementLayoutInfo = .{
+        .x = writePos.x,
+        .y = writePos.y,
+    };
 
     const preAdjust = getPreAdjustment(element.styles);
     const postAdjust = getPostAdjustment(element.styles);
@@ -146,46 +167,94 @@ pub fn setElementDimensions(element: *UIElement) void {
             var currentX: u16 = 0;
             for (text.data) |char| {
                 if (char == '\n') {
-                    size.height += 1;
+                    const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
+                    if (currentElHeight >= sizeConstraint.height) break;
+
+                    elInfo.height += 1;
                     currentX = 0;
                     continue;
                 }
 
+                if (currentX + preAdjust.width + postAdjust.width >= sizeConstraint.width) {
+                    break;
+                }
+
                 currentX += 1;
-                size.width = @max(size.width, currentX);
+                elInfo.width = @max(elInfo.width, currentX);
             }
 
-            size.width += preAdjust.width + postAdjust.width;
-            size.height += preAdjust.height + postAdjust.height;
+            elInfo.width += preAdjust.width + postAdjust.width;
+            elInfo.height += preAdjust.height + postAdjust.height;
         },
         .Layout => |layout| {
-            size.width += preAdjust.width + postAdjust.width;
-            size.height += preAdjust.height + postAdjust.height;
+            elInfo.width += preAdjust.width + postAdjust.width;
+            elInfo.height += preAdjust.height + postAdjust.height;
 
             switch (layout) {
-                .Horizontal => |elements| {
-                    for (elements) |el| {
-                        setElementDimensions(el);
-                        size.width += el.size.width;
-                        size.height = @max(size.height, el.size.height);
+                .Horizontal => |layoutInfo| {
+                    for (layoutInfo.elements, 0..) |el, index| {
+                        const constraint = layoutInfo.getConstraint(index);
+                        const newSizeConstraint = if (constraint) |cons|
+                            getSizeConstraint(sizeConstraint, cons)
+                        else
+                            sizeConstraint;
+
+                        const innerElPos = utils.Pos{
+                            .x = elInfo.x + preAdjust.width + elInfo.width,
+                            .y = elInfo.y + preAdjust.height,
+                        };
+                        setElementDimensions(el, newSizeConstraint, innerElPos);
+                        correctElSizeToPossibleConstraint(el, constraint);
+                        elInfo.width += el.layoutInfo.width;
+                        elInfo.height = @max(elInfo.height, el.layoutInfo.height);
                     }
                 },
-                .Vertical => |elements| {
-                    if (elements.len > 0) {
-                        size.height = 0;
+                .Vertical => |layoutInfo| {
+                    if (layoutInfo.elements.len > 0) {
+                        elInfo.height = 0;
                     }
 
-                    for (elements) |el| {
-                        setElementDimensions(el);
-                        size.height += el.size.height;
-                        size.width = @max(size.width, el.size.width);
+                    for (layoutInfo.elements) |el| {
+                        const innerElPos = utils.Pos{
+                            .x = elInfo.x + preAdjust.width,
+                            .y = elInfo.y + preAdjust.height + elInfo.height,
+                        };
+                        setElementDimensions(el, sizeConstraint, innerElPos);
+                        elInfo.height += el.layoutInfo.height;
+                        elInfo.width = @max(elInfo.width, el.layoutInfo.width);
                     }
                 },
             }
         },
     }
 
-    element.size = size;
+    element.layoutInfo = elInfo;
+}
+
+fn correctElSizeToPossibleConstraint(el: *UIElement, constraint: ?Constraint) void {
+    if (constraint) |cons| {
+        switch (cons.width) {
+            .Min => |value| {
+                el.layoutInfo.width = @max(value, el.layoutInfo.width);
+            },
+            else => {},
+        }
+    }
+}
+
+fn getSizeConstraint(currentSize: utils.Size, constraint: Constraint) utils.Size {
+    var sizeCpy = currentSize;
+
+    switch (constraint.width) {
+        .Min => |value| {
+            sizeCpy.width = @max(sizeCpy.width, value);
+        },
+        else => {},
+    }
+
+    // TODO - height + others
+
+    return sizeCpy;
 }
 
 pub fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {

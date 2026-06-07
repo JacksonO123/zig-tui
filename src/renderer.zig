@@ -25,7 +25,7 @@ pub fn render(
     try sequences.setCursorPos(context, 1, 1, writer);
 
     try context.backBuffer.reset(allocator, size);
-    ui.setElementDimensions(el);
+    ui.setElementDimensions(el, context.terminal.size, .{});
     try context.backBuffer.renderInBuffer(allocator, el, size);
     try writeDiff(allocator, context, size, writer);
 

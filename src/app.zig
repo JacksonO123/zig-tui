@@ -25,34 +25,38 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     var aBox = try ui.Text.fromConstText(allocator, areaText);
     _ = aBox.styles.border(.Rounded).paddingX(1).underline().fg(.Black).bg(.Red);
 
-    const topRow = try ui.Layout.fromElements(
+    const topRow = try ui.Layout.fromElementsAndConstraints(
         allocator,
-        &[_]*ui.UIElement{ wBox, hBox, aBox },
-        // if (terminal.size.width % 2 == 0) .Vertical else .Horizontal,
-        .Vertical,
-    );
-
-    var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
-    _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
-
-    const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
-
-    var styledLine = try ui.Text.fromConstText(allocator, "bold+italic+underline");
-    _ = styledLine.styles.bold().italic().underline();
-
-    const bottomRow = try ui.Layout.fromElements(
-        allocator,
-        &[_]*ui.UIElement{ plain, styledLine },
-        // if (terminal.size.width % 2 == 0) .Vertical else .Horizontal,
-        .Vertical,
-    );
-
-    return try ui.Layout.fromElements(
-        allocator,
-        &[_]*ui.UIElement{ topRow, block, bottomRow },
-        // if (terminal.size.width % 2 == 0) .Horizontal else .Vertical,
+        &.{ wBox, hBox, aBox },
+        &.{
+            .{
+                .width = .{ .Min = 25 },
+            },
+        },
         .Horizontal,
     );
+
+    return topRow;
+
+    // var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
+    // _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
+
+    // const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
+
+    // var styledLine = try ui.Text.fromConstText(allocator, "bold+italic+underline");
+    // _ = styledLine.styles.bold().italic().underline();
+
+    // const bottomRow = try ui.Layout.fromElements(
+    //     allocator,
+    //     &.{ plain, styledLine },
+    //     .Vertical,
+    // );
+
+    // return try ui.Layout.fromElements(
+    //     allocator,
+    //     &.{ topRow, block, bottomRow },
+    //     .Horizontal,
+    // );
 }
 
 pub const mockConfig: config.Config = .{

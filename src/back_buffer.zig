@@ -11,17 +11,11 @@ const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
-const BackBufferPos = struct {
-    x: usize,
-    y: usize,
-};
-
 pub const BackBuffer = struct {
     const Self = @This();
 
     buffer: bufferUtil.CharBuffer,
     lineLimit: usize,
-    pos: BackBufferPos,
     rendering: stylesMod.SimpleDataStyle = .{},
 
     pub inline fn init(
@@ -35,10 +29,6 @@ pub const BackBuffer = struct {
         return .{
             .buffer = lines,
             .lineLimit = 1,
-            .pos = .{
-                .x = 0,
-                .y = 0,
-            },
         };
     }
 
@@ -52,7 +42,6 @@ pub const BackBuffer = struct {
         }
 
         self.lineLimit = 1;
-        self.pos = .{ .x = 0, .y = 0 };
     }
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
@@ -69,24 +58,18 @@ pub const BackBuffer = struct {
         element: *ui.UIElement,
         size: utils.Size,
     ) !void {
-        const trueStart = self.pos;
-
         const preAdjust = ui.getPreAdjustment(element.styles);
         const postAdjust = ui.getPostAdjustment(element.styles);
-        self.pos.x += preAdjust.width;
-        self.pos.y += preAdjust.height;
-
-        const startPos = self.pos;
         const simpleStyles = element.styles.toSimpleStyles();
 
         {
-            try self.ensureLineExists(allocator, trueStart.y + element.size.height, size.width);
+            try self.ensureLineExists(allocator, element.layoutInfo.y + element.layoutInfo.height, size.width);
             var styleCpy = simpleStyles;
             styleCpy.underline = false;
-            for (self.buffer.items[trueStart.y .. trueStart.y + element.size.height]) |line| {
-                if (trueStart.x < size.width) {
-                    const to = @min(trueStart.x + element.size.width, size.width);
-                    @memset(line.items[trueStart.x..to], .{
+            for (self.buffer.items[element.layoutInfo.y .. element.layoutInfo.y + element.layoutInfo.height]) |line| {
+                if (element.layoutInfo.x < size.width) {
+                    const to = @min(element.layoutInfo.x + element.layoutInfo.width, size.width);
+                    @memset(line.items[element.layoutInfo.x..to], .{
                         .data = .{
                             .bytes = "    ".*,
                             .len = 1,
@@ -99,63 +82,67 @@ pub const BackBuffer = struct {
 
         switch (element.variant) {
             .Text => |text| {
-                var maxX: usize = self.pos.x;
+                var renderPos = utils.Pos{
+                    .x = element.layoutInfo.x + preAdjust.width,
+                    .y = element.layoutInfo.y + preAdjust.height,
+                };
+
+                var currentHeight = preAdjust.height + postAdjust.height;
+                var currentWidth = preAdjust.width + postAdjust.width;
                 for (text.data) |char| {
                     if (char == '\n') {
-                        self.pos.x = startPos.x;
-                        self.pos.y += 1;
+                        if (currentHeight >= element.layoutInfo.height) break;
+
+                        renderPos.x = element.layoutInfo.x + preAdjust.width;
+                        renderPos.y += 1;
+                        currentHeight += 1;
                         continue;
                     }
 
-                    try self.writeCharAtPos(allocator, size, self.pos, char, simpleStyles);
-                    self.pos.x += 1;
-                    maxX = @max(maxX, self.pos.x);
+                    if (currentWidth >= element.layoutInfo.width) {
+                        break;
+                    }
+
+                    try self.writeCharAtPos(allocator, size, renderPos, char, simpleStyles);
+                    renderPos.x += 1;
+                    currentWidth += 1;
                 }
-                self.pos.x = maxX;
             },
             .Layout => |layout| {
                 switch (layout) {
-                    .Horizontal => |elements| {
-                        var maxY = startPos.y;
-                        for (elements) |el| {
+                    .Horizontal => |layoutUtil| {
+                        for (layoutUtil.elements) |el| {
                             try self.renderInBuffer(allocator, el, size);
-                            maxY = @max(maxY, self.pos.y);
-                            self.pos.y = startPos.y;
                         }
-                        self.pos.y = maxY;
                     },
-                    .Vertical => |elements| {
-                        var maxX = startPos.x;
-                        for (elements, 0..) |el, index| {
+                    .Vertical => |layoutUtil| {
+                        for (layoutUtil.elements) |el| {
                             try self.renderInBuffer(allocator, el, size);
-                            maxX = @max(maxX, self.pos.x);
-
-                            if (index < elements.len - 1) {
-                                self.pos.y += 1;
-                                self.pos.x = startPos.x;
-                            } else {
-                                self.pos.x = maxX;
-                            }
                         }
                     },
                 }
             },
         }
 
-        self.pos.x += postAdjust.width;
-        self.pos.y += postAdjust.height;
-        try self.ensureLineExists(allocator, self.pos.y, size.width);
-        try self.renderStylesPost(allocator, trueStart, element.styles, size);
+        try self.ensureLineExists(
+            allocator,
+            element.layoutInfo.y + element.layoutInfo.height,
+            size.width,
+        );
+        try self.renderStylesPost(allocator, element.layoutInfo, element.styles, size);
     }
 
     fn renderStylesPost(
         self: *Self,
         allocator: Allocator,
-        startPos: BackBufferPos,
+        layoutInfo: ui.ElementLayoutInfo,
         styles: stylesMod.Styles,
         size: utils.Size,
     ) !void {
-        var pos = startPos;
+        var pos = utils.Pos{
+            .x = layoutInfo.x,
+            .y = layoutInfo.y,
+        };
         if (styles.styles.border.getChars()) |borderStyles| {
             var simpleStyles = styles.toSimpleStyles();
             simpleStyles.underline = false;
@@ -167,7 +154,8 @@ pub const BackBuffer = struct {
                 borderStyles.corners.topLeft,
                 simpleStyles,
             );
-            pos.x = self.pos.x - 1;
+
+            pos.x = layoutInfo.x + layoutInfo.width - 1;
             try self.writeUnicodeAtPos(
                 allocator,
                 size,
@@ -175,8 +163,9 @@ pub const BackBuffer = struct {
                 borderStyles.corners.topRight,
                 simpleStyles,
             );
-            pos.x = startPos.x;
-            pos.y = self.pos.y;
+
+            pos.x = layoutInfo.x;
+            pos.y = layoutInfo.y + layoutInfo.height - 1;
             try self.writeUnicodeAtPos(
                 allocator,
                 size,
@@ -184,7 +173,8 @@ pub const BackBuffer = struct {
                 borderStyles.corners.bottomLeft,
                 simpleStyles,
             );
-            pos.x = self.pos.x - 1;
+
+            pos.x = layoutInfo.x + layoutInfo.width - 1;
             try self.writeUnicodeAtPos(
                 allocator,
                 size,
@@ -192,60 +182,58 @@ pub const BackBuffer = struct {
                 borderStyles.corners.bottomRight,
                 simpleStyles,
             );
-            pos.y = startPos.y;
-            pos.x = startPos.x + 1;
 
-            const diffX = self.pos.x - pos.x - 1;
-            var i: usize = 0;
-            while (i < diffX) : (i += 1) {
-                const prev = pos.y;
+            var horizontalBorder = bufferUtil.BufferChar{
+                .style = simpleStyles,
+                .data = .{
+                    .bytes = "    ".*,
+                    .len = 0,
+                },
+            };
+            @memcpy(
+                horizontalBorder.data.bytes[0..borderStyles.horizontal.len],
+                borderStyles.horizontal,
+            );
+            horizontalBorder.data.len = @intCast(borderStyles.horizontal.len);
 
-                try self.writeUnicodeAtPos(
-                    allocator,
-                    size,
-                    pos,
-                    borderStyles.horizontal,
-                    simpleStyles,
-                );
-                pos.y = self.pos.y;
-                try self.writeUnicodeAtPos(
-                    allocator,
-                    size,
-                    pos,
-                    borderStyles.horizontal,
-                    simpleStyles,
-                );
-                pos.y = prev;
+            var verticalBorder = bufferUtil.BufferChar{
+                .style = simpleStyles,
+                .data = .{
+                    .bytes = "    ".*,
+                    .len = 0,
+                },
+            };
+            @memcpy(
+                verticalBorder.data.bytes[0..borderStyles.vertical.len],
+                borderStyles.vertical,
+            );
+            verticalBorder.data.len = @intCast(borderStyles.vertical.len);
 
-                pos.x += 1;
+            a: {
+                const line = &self.buffer.items[layoutInfo.y];
+                if (layoutInfo.x + layoutInfo.width - 1 >= line.items.len) break :a;
+                const cells = line.items[layoutInfo.x + 1 .. layoutInfo.x + layoutInfo.width - 1];
+                @memset(cells, horizontalBorder);
             }
 
-            pos.x = startPos.x;
-            pos.y += 1;
+            a: {
+                const line = &self.buffer.items[layoutInfo.y + layoutInfo.height - 1];
+                if (layoutInfo.x + layoutInfo.width - 1 >= line.items.len) break :a;
+                const cells = line.items[layoutInfo.x + 1 .. layoutInfo.x + layoutInfo.width - 1];
+                @memset(cells, horizontalBorder);
+            }
 
-            i = 0;
-            const diffY = self.pos.y - pos.y;
-            while (i < diffY) : (i += 1) {
-                const prev = pos.x;
+            var currentY: usize = layoutInfo.y + 1;
+            const endY = layoutInfo.y + layoutInfo.height - 1;
+            while (currentY < endY) : (currentY += 1) {
+                const line = self.buffer.items[currentY];
+                if (layoutInfo.x >= line.items.len) break;
+                const leftCell = &line.items[layoutInfo.x];
+                leftCell.* = verticalBorder;
 
-                try self.writeUnicodeAtPos(
-                    allocator,
-                    size,
-                    pos,
-                    borderStyles.vertical,
-                    simpleStyles,
-                );
-                pos.x = self.pos.x - 1;
-                try self.writeUnicodeAtPos(
-                    allocator,
-                    size,
-                    pos,
-                    borderStyles.vertical,
-                    simpleStyles,
-                );
-                pos.x = prev;
-
-                pos.y += 1;
+                if (layoutInfo.x + layoutInfo.width - 1 >= line.items.len) continue;
+                const rightCell = &line.items[layoutInfo.x + layoutInfo.width - 1];
+                rightCell.* = verticalBorder;
             }
         }
     }
@@ -254,7 +242,7 @@ pub const BackBuffer = struct {
         self: *Self,
         allocator: Allocator,
         size: utils.Size,
-        pos: BackBufferPos,
+        pos: utils.Pos,
         char: u8,
         styles: stylesMod.SimpleDataStyle,
     ) !void {
@@ -272,7 +260,7 @@ pub const BackBuffer = struct {
         self: *Self,
         allocator: Allocator,
         size: utils.Size,
-        pos: BackBufferPos,
+        pos: utils.Pos,
         chars: []const u8,
         styles: stylesMod.SimpleDataStyle,
     ) !void {
