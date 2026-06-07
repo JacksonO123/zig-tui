@@ -50,9 +50,7 @@ pub const RenderContext = struct {
 
     pub fn onTerminalResize(self: *Self, size: utils.Size) !void {
         self.terminal.size = size;
-        if (self.config.fullscreen) {
-            self.state.forceReRender = true;
-        }
+        self.state.forceReRender = true;
     }
 
     pub fn prepareForReRender(self: *Self) void {

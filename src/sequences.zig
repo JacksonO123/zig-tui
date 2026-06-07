@@ -17,6 +17,8 @@ const Codes = struct {
     enableAutoWrap: Str,
     clearScreen: Str,
     resetStyles: Str,
+    hideCursor: Str,
+    showCursor: Str,
 
     boldText: Str,
     disableBoldText: Str,
@@ -38,6 +40,8 @@ pub const codes: Codes = .{
     .enableAutoWrap = "\x1b[?7h",
     .clearScreen = "\x1b[2J",
     .resetStyles = "\x1b[0m",
+    .hideCursor = "\x1b[?25l",
+    .showCursor = "\x1b[?25h",
 
     .boldText = "\x1b[1m",
     .disableBoldText = "\x1b[22m",
@@ -149,4 +153,12 @@ pub fn setBgFromColor(color: stylesMod.Color, writer: *Writer) !void {
         .None => "\x1b[49m",
     };
     try writer.writeAll(code);
+}
+
+pub fn hideCursor(writer: *Writer) !void {
+    try writer.writeAll(codes.hideCursor);
+}
+
+pub fn showCursor(writer: *Writer) !void {
+    try writer.writeAll(codes.showCursor);
 }

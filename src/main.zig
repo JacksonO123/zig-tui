@@ -9,6 +9,8 @@ const context = @import("context.zig");
 const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
 const utils = @import("utils.zig");
+const configMod = @import("config.zig");
+const Writer = std.Io.Writer;
 
 var resizePipeWriteFd: std.posix.fd_t = -1;
 
@@ -49,18 +51,8 @@ pub fn main(init: std.process.Init) !void {
         .{ .fd = resizeFds[0], .events = std.posix.POLL.IN, .revents = 0 },
     };
 
-    try utils.enableRawMode();
-    defer utils.disableRawMode();
-
-    try sequences.disableAutoWrap(writer);
-    defer {
-        sequences.enableAutoWrap(writer) catch {};
-        writer.flush() catch {};
-    }
-
-    if (app.mockConfig.fullscreen) {
-        try sequences.setCursorPosAbsolute(1, 1, writer);
-    }
+    try initTui(app.mockConfig, writer);
+    defer deinitTui(writer) catch {};
 
     var size = try utils.getWinSize();
     var renderContext = try context.RenderContext.init(
@@ -109,4 +101,22 @@ pub fn main(init: std.process.Init) !void {
             }
         }
     }
+}
+
+fn initTui(config: configMod.Config, writer: *Writer) !void {
+    try utils.enableRawMode();
+    try sequences.hideCursor(writer);
+    try sequences.disableAutoWrap(writer);
+
+    if (config.fullscreen) {
+        try sequences.setCursorPosAbsolute(1, 1, writer);
+        try sequences.clearScreen(writer);
+    }
+}
+
+fn deinitTui(writer: *Writer) !void {
+    try sequences.showCursor(writer);
+    utils.disableRawMode();
+    try sequences.enableAutoWrap(writer);
+    try writer.flush();
 }

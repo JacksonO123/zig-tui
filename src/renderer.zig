@@ -18,14 +18,17 @@ pub fn render(
     writer: *Writer,
 ) !void {
     if (context.config.fullscreen) {
-        try sequences.clearScreen(writer);
         try sequences.setCursorPosAbsolute(1, 1, writer);
+    } else {
+        try sequences.setCursorPos(context, 1, 1, writer);
     }
 
-    try sequences.setCursorPos(context, 1, 1, writer);
+    if (context.state.forceReRender) {
+        try sequences.eraseDisplayAfterCursor(writer);
+    }
 
     try context.backBuffer.reset(allocator, size);
-    ui.setElementDimensions(el, context.terminal.size, .{});
+    ui.setElementDimensions(el, size, .{});
     try context.backBuffer.renderInBuffer(allocator, el, size);
     try writeDiff(allocator, context, size, writer);
 
@@ -53,6 +56,8 @@ fn writeDiff(
     const backBufferLines = context.backBuffer.buffer.items[0..context.backBuffer.lineLimit];
     for (frontBufferLines, backBufferLines) |*frontLine, *backLine| {
         for (frontLine.items, backLine.items, 0..) |frontCell, backCell, cellIndex| {
+            if (cellIndex >= size.width - 1) break;
+
             if (context.state.forceReRender or !frontCell.compareTo(backCell)) {
                 if (atCol < cellIndex) {
                     try sequences.setCursorCol(cellIndex + 1, writer);
@@ -69,7 +74,7 @@ fn writeDiff(
 
         try sequences.setBgFromColor(.None, writer);
         context.frontBuffer.rendering.bg = .None;
-        try writer.writeByte('\n');
+        try writer.writeAll("\r\n");
         atCol = 0;
     }
 }

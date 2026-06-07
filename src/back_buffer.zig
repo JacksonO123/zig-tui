@@ -211,15 +211,21 @@ pub const BackBuffer = struct {
 
             a: {
                 const line = &self.buffer.items[layoutInfo.y];
-                if (layoutInfo.x + layoutInfo.width - 1 >= line.items.len) break :a;
-                const cells = line.items[layoutInfo.x + 1 .. layoutInfo.x + layoutInfo.width - 1];
+                if (layoutInfo.x + 1 >= line.items.len) break :a;
+                const cells = line.items[layoutInfo.x + 1 .. @min(
+                    layoutInfo.x + layoutInfo.width - 1,
+                    line.items.len,
+                )];
                 @memset(cells, horizontalBorder);
             }
 
             a: {
                 const line = &self.buffer.items[layoutInfo.y + layoutInfo.height - 1];
-                if (layoutInfo.x + layoutInfo.width - 1 >= line.items.len) break :a;
-                const cells = line.items[layoutInfo.x + 1 .. layoutInfo.x + layoutInfo.width - 1];
+                if (layoutInfo.x + 1 >= line.items.len) break :a;
+                const cells = line.items[layoutInfo.x + 1 .. @min(
+                    layoutInfo.x + layoutInfo.width - 1,
+                    line.items.len,
+                )];
                 @memset(cells, horizontalBorder);
             }
 

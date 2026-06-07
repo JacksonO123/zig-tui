@@ -42,6 +42,8 @@ pub fn enableRawMode() !void {
     raw.lflag.IEXTEN = false;
     raw.lflag.ISIG = false;
 
+    raw.oflag.OPOST = false;
+
     raw.cc[@intFromEnum(std.posix.V.MIN)] = 0;
     raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
 
