@@ -168,7 +168,9 @@ pub fn setElementDimensions(
             for (text.data) |char| {
                 if (char == '\n') {
                     const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
-                    if (currentElHeight >= sizeConstraint.height) break;
+                    if (currentElHeight >= sizeConstraint.height) {
+                        break;
+                    }
 
                     elInfo.height += 1;
                     currentX = 0;
@@ -239,22 +241,47 @@ fn correctElSizeToPossibleConstraint(el: *UIElement, constraint: ?Constraint) vo
             },
             else => {},
         }
+
+        switch (cons.height) {
+            .Min => |value| {
+                el.layoutInfo.height = @max(value, el.layoutInfo.height);
+            },
+            else => {},
+        }
     }
 }
 
 fn getSizeConstraint(currentSize: utils.Size, constraint: Constraint) utils.Size {
     var sizeCpy = currentSize;
 
-    switch (constraint.width) {
+    getSizeConstraintUtil(&sizeCpy, constraint, "width");
+    getSizeConstraintUtil(&sizeCpy, constraint, "height");
+
+    return sizeCpy;
+}
+
+fn getSizeConstraintUtil(
+    sizeCpy: *utils.Size,
+    constraint: anytype,
+    comptime field: []const u8,
+) void {
+    if (!@hasField(@TypeOf(constraint), field)) {
+        @compileError("Expected " ++ @typeName(@TypeOf(constraint)) ++ " to have field " ++ field);
+    }
+
+    if (!@hasField(@TypeOf(sizeCpy.*), field)) {
+        @compileError("Expected " ++ @typeName(@TypeOf(sizeCpy.*)) ++ " to have field " ++ field);
+    }
+
+    switch (@field(constraint, field)) {
         .Min => |value| {
-            sizeCpy.width = @max(sizeCpy.width, value);
+            @field(sizeCpy, field) = @max(@field(sizeCpy, field), value);
+        },
+        .Max => |value| {
+            @field(sizeCpy, field) = @min(@field(sizeCpy, field), value);
         },
         else => {},
     }
-
-    // TODO - height + others
-
-    return sizeCpy;
 }
 
 pub fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {

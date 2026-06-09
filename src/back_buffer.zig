@@ -91,9 +91,12 @@ pub const BackBuffer = struct {
                 var currentWidth = preAdjust.width + postAdjust.width;
                 for (text.data) |char| {
                     if (char == '\n') {
-                        if (currentHeight >= element.layoutInfo.height) break;
+                        if (currentHeight >= element.layoutInfo.height) {
+                            break;
+                        }
 
                         renderPos.x = element.layoutInfo.x + preAdjust.width;
+                        currentWidth = 0;
                         renderPos.y += 1;
                         currentHeight += 1;
                         continue;

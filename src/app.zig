@@ -10,33 +10,26 @@ const utils = @import("utils.zig");
 
 pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     const allocator = terminal.allocator;
-    const area: u32 = @as(u32, terminal.size.width) * @as(u32, terminal.size.height);
 
-    const widthText = try std.fmt.allocPrint(allocator, "w: {d}", .{terminal.size.width});
-    const heightText = try std.fmt.allocPrint(allocator, "h: {d}", .{terminal.size.height});
-    const areaText = try std.fmt.allocPrint(allocator, "area: {d}", .{area});
+    var someText = try ui.Text.fromConstText(allocator, "some lo\nng tex\nt that\n is lon\nger th\nan 10\n ch\nars");
+    _ = someText.styles.border(.Square);
 
-    var wBox = try ui.Text.fromConstText(allocator, widthText);
-    _ = wBox.styles.border(.Rounded).paddingX(1).italic().fg(.Green);
+    var hText = try ui.Text.fromConstText(allocator, "h");
+    _ = hText.styles.border(.Rounded).fg(.Blue);
 
-    var hBox = try ui.Text.fromConstText(allocator, heightText);
-    _ = hBox.styles.border(.Square).paddingX(1).bold().fg(.Blue);
-
-    var aBox = try ui.Text.fromConstText(allocator, areaText);
-    _ = aBox.styles.border(.Rounded).paddingX(1).underline().fg(.Black).bg(.Red);
-
-    const topRow = try ui.Layout.fromElementsAndConstraints(
+    const layout = try ui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{ wBox, hBox, aBox },
+        &.{ someText, hText },
         &.{
             .{
-                .width = .{ .Min = 25 },
+                .width = .{ .Max = 10 },
+                .height = .{ .Max = 4 },
             },
         },
         .Horizontal,
     );
 
-    return topRow;
+    return layout;
 
     // var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
     // _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
