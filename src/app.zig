@@ -29,29 +29,25 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
         .Horizontal,
     );
 
-    return layout;
+    var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
+    _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
 
-    // var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
-    // _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
+    const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
 
-    // const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
+    var styledLine = try ui.Text.fromConstText(allocator, "bold+italic+underline");
+    _ = styledLine.styles.bold().italic().underline();
 
-    // var styledLine = try ui.Text.fromConstText(allocator, "bold+italic+underline");
-    // _ = styledLine.styles.bold().italic().underline();
+    const bottomRow = try ui.Layout.fromElements(
+        allocator,
+        &.{ plain, styledLine },
+        .Vertical,
+    );
 
-    // const bottomRow = try ui.Layout.fromElements(
-    //     allocator,
-    //     &.{ plain, styledLine },
-    //     .Vertical,
-    // );
-
-    // return try ui.Layout.fromElements(
-    //     allocator,
-    //     &.{ topRow, block, bottomRow },
-    //     .Horizontal,
-    // );
+    return try ui.Layout.fromElements(
+        allocator,
+        &.{ layout, block, bottomRow },
+        .Horizontal,
+    );
 }
 
-pub const mockConfig: config.Config = .{
-    .fullscreen = false,
-};
+pub const mockConfig: config.Config = .{};

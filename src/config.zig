@@ -1,3 +1,9 @@
+pub const ScreenType = enum {
+    Fullscreen,
+    Main,
+    Alternate,
+};
+
 pub const Config = struct {
-    fullscreen: bool = false,
+    screenType: ScreenType = .Main,
 };

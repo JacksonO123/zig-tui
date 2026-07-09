@@ -108,7 +108,7 @@ fn initTui(config: configMod.Config, writer: *Writer) !void {
     try sequences.hideCursor(writer);
     try sequences.disableAutoWrap(writer);
 
-    if (config.fullscreen) {
+    if (config.screenType == .Fullscreen) {
         try sequences.setCursorPosAbsolute(1, 1, writer);
         try sequences.clearScreen(writer);
     }

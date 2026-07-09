@@ -17,7 +17,7 @@ pub fn render(
     size: utils.Size,
     writer: *Writer,
 ) !void {
-    if (context.config.fullscreen) {
+    if (context.config.screenType == .Fullscreen) {
         try sequences.setCursorPosAbsolute(1, 1, writer);
     } else {
         try sequences.setCursorPos(context, 1, 1, writer);
