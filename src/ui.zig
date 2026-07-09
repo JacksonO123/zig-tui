@@ -165,7 +165,10 @@ pub fn setElementDimensions(
     switch (element.variant) {
         .Text => |text| {
             var currentX: u16 = 0;
-            for (text.data) |char| {
+            var i: usize = 0;
+            while (i < text.data.len) : (i += 1) {
+                const char = text.data[i];
+
                 if (char == '\n') {
                     const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
                     if (currentElHeight >= sizeConstraint.height) {
@@ -178,7 +181,18 @@ pub fn setElementDimensions(
                 }
 
                 if (currentX + preAdjust.width + postAdjust.width >= sizeConstraint.width) {
-                    break;
+                    while (i < text.data.len and text.data[i] != '\n') : (i += 1) {}
+
+                    if (text.data[i] != '\n') break;
+
+                    const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
+                    if (currentElHeight >= sizeConstraint.height) {
+                        break;
+                    }
+
+                    elInfo.height += 1;
+                    currentX = 0;
+                    continue;
                 }
 
                 currentX += 1;

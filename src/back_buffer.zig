@@ -89,7 +89,11 @@ pub const BackBuffer = struct {
 
                 var currentHeight = preAdjust.height + postAdjust.height;
                 var currentWidth = preAdjust.width + postAdjust.width;
-                for (text.data) |char| {
+
+                var i: usize = 0;
+                while (i < text.data.len) : (i += 1) {
+                    const char = text.data[i];
+
                     if (char == '\n') {
                         if (currentHeight >= element.layoutInfo.height) {
                             break;
@@ -103,7 +107,19 @@ pub const BackBuffer = struct {
                     }
 
                     if (currentWidth >= element.layoutInfo.width) {
-                        break;
+                        while (i < text.data.len and text.data[i] != '\n') : (i += 1) {}
+
+                        if (text.data[i] != '\n') break;
+
+                        if (currentHeight >= element.layoutInfo.height) {
+                            break;
+                        }
+
+                        renderPos.x = element.layoutInfo.x + preAdjust.width;
+                        currentWidth = 0;
+                        renderPos.y += 1;
+                        currentHeight += 1;
+                        continue;
                     }
 
                     try self.writeCharAtPos(allocator, size, renderPos, char, simpleStyles);
