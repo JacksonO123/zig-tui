@@ -183,7 +183,7 @@ pub fn setElementDimensions(
                 if (currentX + preAdjust.width + postAdjust.width >= sizeConstraint.width) {
                     while (i < text.data.len and text.data[i] != '\n') : (i += 1) {}
 
-                    if (text.data[i] != '\n') break;
+                    if (i >= text.data.len or text.data[i] != '\n') break;
 
                     const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
                     if (currentElHeight >= sizeConstraint.height) {

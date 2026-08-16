@@ -109,7 +109,7 @@ pub const BackBuffer = struct {
                     if (currentWidth >= element.layoutInfo.width) {
                         while (i < text.data.len and text.data[i] != '\n') : (i += 1) {}
 
-                        if (text.data[i] != '\n') break;
+                        if (i >= text.data.len or text.data[i] != '\n') break;
 
                         if (currentHeight >= element.layoutInfo.height) {
                             break;

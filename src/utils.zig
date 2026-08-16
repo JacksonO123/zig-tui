@@ -13,16 +13,6 @@ pub const Pos = struct {
     y: u16 = 0,
 };
 
-pub fn getWinSize() !Size {
-    var winSize: std.posix.winsize = undefined;
-    const fd = std.Io.File.stdout().handle;
-    const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winSize));
-    if (std.posix.errno(err) != .SUCCESS) {
-        return error.IoctlFailed;
-    }
-    return .{ .height = winSize.row, .width = winSize.col };
-}
-
 var savedTermios: ?std.posix.termios = null;
 
 pub fn enableRawMode() !void {

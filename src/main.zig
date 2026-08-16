@@ -1,24 +1,19 @@
 const std = @import("std");
+const Writer = std.Io.Writer;
 const builtin = @import("builtin");
 
 const c = @import("c");
 const zig_tui = @import("zig_tui");
 
 const app = @import("app.zig");
+const configMod = @import("config.zig");
 const context = @import("context.zig");
 const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
 const utils = @import("utils.zig");
-const configMod = @import("config.zig");
-const Writer = std.Io.Writer;
+const termMod = @import("terminal.zig");
 
 var resizePipeWriteFd: std.posix.fd_t = -1;
-
-fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
-    _ = sig;
-    const byte: u8 = 1;
-    _ = std.c.write(resizePipeWriteFd, @ptrCast(&byte), 1);
-}
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -30,70 +25,31 @@ pub fn main(init: std.process.Init) !void {
     var stdout = std.Io.File.stdout().writer(io, &stdoutBuf);
     const writer = &stdout.interface;
 
-    var resizeFds: [2]std.posix.fd_t = undefined;
-    if (std.c.pipe(&resizeFds) < 0) return error.PipeFailed;
-    defer _ = std.c.close(resizeFds[0]);
-    defer _ = std.c.close(resizeFds[1]);
-    try utils.setNonblocking(resizeFds[0]);
-    try utils.setNonblocking(resizeFds[1]);
-    resizePipeWriteFd = resizeFds[1];
-
-    var action: std.posix.Sigaction = .{
-        .handler = .{ .handler = sigWinchHandler },
-        .mask = std.posix.sigemptyset(),
-        .flags = 0,
-    };
-    std.posix.sigaction(std.posix.SIG.WINCH, &action, null);
-
-    const stdinFd = std.Io.File.stdin().handle;
-    var pollFds = [_]std.posix.pollfd{
-        .{ .fd = stdinFd, .events = std.posix.POLL.IN, .revents = 0 },
-        .{ .fd = resizeFds[0], .events = std.posix.POLL.IN, .revents = 0 },
-    };
-
-    try initTui(app.mockConfig, writer);
-    defer deinitTui(writer) catch {};
-
-    var size = try utils.getWinSize();
     var renderContext = try context.RenderContext.init(
         gpa,
         globalArenaAllocator,
         app.mockConfig,
-        size,
+        writer,
     );
-    defer renderContext.deinit(gpa);
+    defer renderContext.deinit(gpa, writer);
 
     var el = try app.renderUI(&renderContext.terminal);
-    try renderer.render(gpa, &renderContext, el, size, writer);
+    try renderer.render(gpa, &renderContext, el, writer);
 
     while (true) {
-        _ = try std.posix.poll(&pollFds, -1);
+        const pollData, const readData = try renderContext.terminal.pollEvents();
 
-        if ((pollFds[1].revents & std.posix.POLL.IN) != 0) {
-            var drainBuf: [64]u8 = undefined;
-            while (true) {
-                _ = std.posix.read(resizeFds[0], &drainBuf) catch |err| switch (err) {
-                    error.WouldBlock => break,
-                    else => return err,
-                };
-            }
-
-            size = try utils.getWinSize();
+        if (pollData.includes(.Resize)) {
+            const size = try termMod.Terminal.getTermSize();
             try renderContext.onTerminalResize(size);
             renderContext.prepareForReRender();
             el = try app.renderUI(&renderContext.terminal);
-            try renderer.render(gpa, &renderContext, el, size, writer);
+            try renderer.render(gpa, &renderContext, el, writer);
         }
 
-        if ((pollFds[0].revents & std.posix.POLL.IN) != 0) {
-            var buf: [64]u8 = undefined;
-            const bytesRead = std.posix.read(stdinFd, &buf) catch |err| switch (err) {
-                error.WouldBlock => continue,
-                else => return err,
-            };
-
-            if (bytesRead == 0) continue;
-            for (buf[0..bytesRead]) |byte| {
+        if (pollData.includes(.Stdin)) {
+            if (readData.len == 0) continue;
+            for (readData) |byte| {
                 switch (byte) {
                     'q', 0x03 => return,
                     else => {},
@@ -101,22 +57,4 @@ pub fn main(init: std.process.Init) !void {
             }
         }
     }
-}
-
-fn initTui(config: configMod.Config, writer: *Writer) !void {
-    try utils.enableRawMode();
-    try sequences.hideCursor(writer);
-    try sequences.disableAutoWrap(writer);
-
-    if (config.screenType == .Fullscreen) {
-        try sequences.setCursorPosAbsolute(1, 1, writer);
-        try sequences.clearScreen(writer);
-    }
-}
-
-fn deinitTui(writer: *Writer) !void {
-    try sequences.showCursor(writer);
-    utils.disableRawMode();
-    try sequences.enableAutoWrap(writer);
-    try writer.flush();
 }

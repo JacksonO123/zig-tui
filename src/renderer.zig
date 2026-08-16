@@ -14,7 +14,6 @@ pub fn render(
     allocator: Allocator,
     context: *RenderContext,
     el: *ui.UIElement,
-    size: utils.Size,
     writer: *Writer,
 ) !void {
     if (context.config.screenType == .Fullscreen) {
@@ -27,10 +26,10 @@ pub fn render(
         try sequences.eraseDisplayAfterCursor(writer);
     }
 
-    try context.backBuffer.reset(allocator, size);
-    ui.setElementDimensions(el, size, .{});
-    try context.backBuffer.renderInBuffer(allocator, el, size);
-    try writeDiff(allocator, context, size, writer);
+    try context.backBuffer.reset(allocator, context.terminal.size);
+    ui.setElementDimensions(el, context.terminal.size, .{});
+    try context.backBuffer.renderInBuffer(allocator, el, context.terminal.size);
+    try writeDiff(allocator, context, context.terminal.size, writer);
 
     try sequences.resetStyles(writer);
     context.backBuffer.rendering = .{};
