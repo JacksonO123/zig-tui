@@ -9,7 +9,7 @@ const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
 pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
-    const allocator = terminal.allocator;
+    const allocator = terminal.renderAlloc;
 
     // var someText = try ui.Text.fromConstText(allocator, "some lo\nng tex\nt that\n is lon\nger th\nan 10\n ch\nars");
     // _ = someText.styles.border(.Square);
@@ -32,7 +32,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
     _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
 
-    const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
+    // const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
 
     // var styledLine = try ui.Text.fromConstText(allocator, "bold+italic+underline");
     // _ = styledLine.styles.bold().italic().underline();
@@ -49,9 +49,14 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     //     .Horizontal,
     // );
 
-    return try ui.Layout.fromElements(
+    return try ui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{plain},
+        &.{block},
+        &.{.{
+            .width = .{
+                .Ratio = .{ .numerator = 3, .denominator = 4 },
+            },
+        }},
         .Horizontal,
     );
 }

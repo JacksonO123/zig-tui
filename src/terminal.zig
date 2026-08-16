@@ -39,28 +39,47 @@ var resizePipeWriteFd: std.posix.fd_t = undefined;
 pub const Terminal = struct {
     const Self = @This();
 
-    allocator: Allocator,
+    renderAlloc: Allocator,
+    gpa: Allocator,
+
+    pub inline fn init(allocator: Allocator, gpa: Allocator) Self {
+        return .{ .renderAlloc = allocator, .gpa = gpa };
+    }
+};
+
+fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
+    _ = sig;
+    const byte: u8 = 1;
+    _ = std.c.write(resizePipeWriteFd, @ptrCast(&byte), 1);
+}
+
+pub const TerminalInfo = struct {
+    const Self = @This();
+
     size: utils.Size,
     resizeFds: ResizeFds,
     pollFds: PollFds,
     pollArena: std.heap.ArenaAllocator,
+    termArena: std.heap.ArenaAllocator,
 
-    pub inline fn init(allocator: Allocator, config: configMod.Config, writer: *Writer) !Self {
+    pub fn init(allocator: Allocator, config: configMod.Config, writer: *Writer) !Self {
         const pollArena = std.heap.ArenaAllocator.init(allocator);
+        const termArena = std.heap.ArenaAllocator.init(allocator);
+
         const size = try Self.getTermSize();
         try Self.setTermBehavior(config, writer);
-        const resizeFds = try Self.initResizeFd();
+        const resizeFds = try Self.initResizeFds();
         resizePipeWriteFd = resizeFds[1];
 
         Self.initResizeEvent();
         const pollFds = try Self.getPollFds(resizeFds);
 
         return .{
-            .allocator = allocator,
             .size = size,
             .resizeFds = resizeFds,
             .pollFds = pollFds,
             .pollArena = pollArena,
+            .termArena = termArena,
         };
     }
 
@@ -79,6 +98,25 @@ pub const Terminal = struct {
         return .{ .height = winSize.row, .width = winSize.col };
     }
 
+    fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
+        try utils.enableRawMode();
+        try sequences.hideCursor(writer);
+        try sequences.disableAutoWrap(writer);
+
+        if (config.screenType == .Fullscreen) {
+            try sequences.setCursorPosAbsolute(1, 1, writer);
+            try sequences.clearScreen(writer);
+        }
+    }
+
+    fn initResizeFds() !ResizeFds {
+        var resizeFds: ResizeFds = undefined;
+        if (std.c.pipe(&resizeFds) < 0) return error.PipeFailed;
+        try utils.setNonblocking(resizeFds[0]);
+        try utils.setNonblocking(resizeFds[1]);
+        return resizeFds;
+    }
+
     fn getPollFds(resizeFds: ResizeFds) !PollFds {
         const stdinFd = std.Io.File.stdin().handle;
         const pollFds = [_]std.posix.pollfd{
@@ -89,14 +127,6 @@ pub const Terminal = struct {
             .stdinFd = stdinFd,
             .fds = pollFds,
         };
-    }
-
-    fn initResizeFd() !ResizeFds {
-        var resizeFds: ResizeFds = undefined;
-        if (std.c.pipe(&resizeFds) < 0) return error.PipeFailed;
-        try utils.setNonblocking(resizeFds[0]);
-        try utils.setNonblocking(resizeFds[1]);
-        return resizeFds;
     }
 
     fn initResizeEvent() void {
@@ -111,17 +141,6 @@ pub const Terminal = struct {
     fn deinitResizeEvent(self: Self) void {
         _ = std.c.close(self.resizeFds[0]);
         _ = std.c.close(self.resizeFds[1]);
-    }
-
-    fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
-        try utils.enableRawMode();
-        try sequences.hideCursor(writer);
-        try sequences.disableAutoWrap(writer);
-
-        if (config.screenType == .Fullscreen) {
-            try sequences.setCursorPosAbsolute(1, 1, writer);
-            try sequences.clearScreen(writer);
-        }
     }
 
     fn deinitTermBehavior(writer: *Writer) !void {
@@ -168,9 +187,3 @@ pub const Terminal = struct {
         return .{ pollData, readData };
     }
 };
-
-fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
-    _ = sig;
-    const byte: u8 = 1;
-    _ = std.c.write(resizePipeWriteFd, @ptrCast(&byte), 1);
-}

@@ -26,10 +26,10 @@ pub fn render(
         try sequences.eraseDisplayAfterCursor(writer);
     }
 
-    try context.backBuffer.reset(allocator, context.terminal.size);
-    ui.setElementDimensions(el, context.terminal.size, .{});
-    try context.backBuffer.renderInBuffer(allocator, el, context.terminal.size);
-    try writeDiff(allocator, context, context.terminal.size, writer);
+    try context.backBuffer.reset(allocator, context.terminalInfo.size);
+    ui.setElementDimensions(el, context.terminalInfo.size, .{});
+    try context.backBuffer.renderInBuffer(allocator, el, context.terminalInfo.size);
+    try writeDiff(allocator, context, context.terminalInfo.size, writer);
 
     try sequences.resetStyles(writer);
     context.backBuffer.rendering = .{};

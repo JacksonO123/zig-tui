@@ -88,19 +88,20 @@ pub const BackBuffer = struct {
                 };
 
                 var currentHeight = preAdjust.height + postAdjust.height;
-                var currentWidth = preAdjust.width + postAdjust.width;
+                const baseCurrentWidth = preAdjust.width + postAdjust.width;
+                var currentWidth = baseCurrentWidth;
 
                 var i: usize = 0;
                 while (i < text.data.len) : (i += 1) {
                     const char = text.data[i];
 
-                    if (char == '\n') {
-                        if (currentHeight >= element.layoutInfo.height) {
-                            break;
-                        }
+                    if (currentHeight >= element.layoutInfo.height) {
+                        break;
+                    }
 
+                    if (char == '\n') {
                         renderPos.x = element.layoutInfo.x + preAdjust.width;
-                        currentWidth = 0;
+                        currentWidth = baseCurrentWidth;
                         renderPos.y += 1;
                         currentHeight += 1;
                         continue;
@@ -111,14 +112,15 @@ pub const BackBuffer = struct {
 
                         if (i >= text.data.len or text.data[i] != '\n') break;
 
+                        renderPos.x = element.layoutInfo.x + preAdjust.width;
+                        currentWidth = baseCurrentWidth;
+                        renderPos.y += 1;
+                        currentHeight += 1;
+
                         if (currentHeight >= element.layoutInfo.height) {
                             break;
                         }
 
-                        renderPos.x = element.layoutInfo.x + preAdjust.width;
-                        currentWidth = 0;
-                        renderPos.y += 1;
-                        currentHeight += 1;
                         continue;
                     }
 

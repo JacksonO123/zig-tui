@@ -199,7 +199,7 @@ pub fn setElementDimensions(
                 elInfo.width = @max(elInfo.width, currentX);
             }
 
-            elInfo.width += preAdjust.width + postAdjust.width;
+            elInfo.width = @max(elInfo.width + preAdjust.width + postAdjust.width, sizeConstraint.width);
             elInfo.height += preAdjust.height + postAdjust.height;
         },
         .Layout => |layout| {
@@ -220,7 +220,6 @@ pub fn setElementDimensions(
                             .y = elInfo.y + preAdjust.height,
                         };
                         setElementDimensions(el, newSizeConstraint, innerElPos);
-                        correctElSizeToPossibleConstraint(el, constraint);
                         elInfo.width += el.layoutInfo.width;
                         elInfo.height = @max(elInfo.height, el.layoutInfo.height);
                     }
@@ -247,55 +246,32 @@ pub fn setElementDimensions(
     element.layoutInfo = elInfo;
 }
 
-fn correctElSizeToPossibleConstraint(el: *UIElement, constraint: ?Constraint) void {
-    if (constraint) |cons| {
-        switch (cons.width) {
-            .Min => |value| {
-                el.layoutInfo.width = @max(value, el.layoutInfo.width);
-            },
-            else => {},
-        }
-
-        switch (cons.height) {
-            .Min => |value| {
-                el.layoutInfo.height = @max(value, el.layoutInfo.height);
-            },
-            else => {},
-        }
-    }
+fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u16) u16 {
+    return switch (cons) {
+        .Min => |value| @max(value, dimensionConstraint),
+        .Max => |value| @min(value, dimensionConstraint),
+        .Ratio => |value| {
+            const percent = @as(f32, @floatFromInt(value.numerator)) /
+                @as(f32, @floatFromInt(value.denominator));
+            const width = @round(dimensionConstraint * percent);
+            return @intFromFloat(width);
+        },
+        .Percent => |value| {
+            const width = @round(dimensionConstraint * value);
+            return @intFromFloat(width);
+        },
+        .Value => |value| value,
+        .None => dimensionConstraint,
+    };
 }
 
 fn getSizeConstraint(currentSize: utils.Size, constraint: Constraint) utils.Size {
     var sizeCpy = currentSize;
 
-    getSizeConstraintUtil(&sizeCpy, constraint, "width");
-    getSizeConstraintUtil(&sizeCpy, constraint, "height");
+    sizeCpy.width = applySizeConstraint(constraint.width, sizeCpy.width);
+    sizeCpy.height = applySizeConstraint(constraint.height, sizeCpy.height);
 
     return sizeCpy;
-}
-
-fn getSizeConstraintUtil(
-    sizeCpy: *utils.Size,
-    constraint: anytype,
-    comptime field: []const u8,
-) void {
-    if (!@hasField(@TypeOf(constraint), field)) {
-        @compileError("Expected " ++ @typeName(@TypeOf(constraint)) ++ " to have field " ++ field);
-    }
-
-    if (!@hasField(@TypeOf(sizeCpy.*), field)) {
-        @compileError("Expected " ++ @typeName(@TypeOf(sizeCpy.*)) ++ " to have field " ++ field);
-    }
-
-    switch (@field(constraint, field)) {
-        .Min => |value| {
-            @field(sizeCpy, field) = @max(@field(sizeCpy, field), value);
-        },
-        .Max => |value| {
-            @field(sizeCpy, field) = @min(@field(sizeCpy, field), value);
-        },
-        else => {},
-    }
 }
 
 pub fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {

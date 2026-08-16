@@ -19,27 +19,27 @@ pub const RenderContext = struct {
     const Self = @This();
 
     config: configMod.Config,
-    terminalArena: std.heap.ArenaAllocator,
     terminal: terminalMod.Terminal,
     backBuffer: backBufferMod.BackBuffer,
     frontBuffer: frontBufferMod.FrontBuffer,
+    terminalInfo: terminalMod.TerminalInfo,
 
     state: RenderState = .{},
 
     pub inline fn init(
-        allocator: Allocator,
+        gpa: Allocator,
         globalArena: Allocator,
         config: configMod.Config,
         writer: *Writer,
     ) !Self {
-        var terminalArena = std.heap.ArenaAllocator.init(globalArena);
-        const terminal = try terminalMod.Terminal.init(terminalArena.allocator(), config, writer);
+        var terminalInfo = try terminalMod.TerminalInfo.init(globalArena, config, writer);
+        const terminal = terminalMod.Terminal.init(terminalInfo.termArena.allocator(), gpa);
 
         return .{
-            .terminalArena = terminalArena,
             .terminal = terminal,
+            .terminalInfo = terminalInfo,
             .config = config,
-            .backBuffer = try backBufferMod.BackBuffer.init(allocator, terminal.size),
+            .backBuffer = try backBufferMod.BackBuffer.init(gpa, terminalInfo.size),
             .frontBuffer = .empty,
         };
     }
@@ -47,15 +47,15 @@ pub const RenderContext = struct {
     pub fn deinit(self: *Self, allocator: Allocator, writer: *Writer) void {
         self.backBuffer.deinit(allocator);
         self.frontBuffer.deinit(allocator);
-        self.terminal.deinit(writer);
+        self.terminalInfo.deinit(writer);
     }
 
     pub fn onTerminalResize(self: *Self, size: utils.Size) !void {
-        self.terminal.size = size;
+        self.terminalInfo.size = size;
         self.state.forceReRender = true;
     }
 
     pub fn prepareForReRender(self: *Self) void {
-        _ = self.terminalArena.reset(.retain_capacity);
+        _ = self.terminalInfo.termArena.reset(.retain_capacity);
     }
 };

@@ -32,15 +32,16 @@ pub fn main(init: std.process.Init) !void {
         writer,
     );
     defer renderContext.deinit(gpa, writer);
+    errdefer renderContext.deinit(gpa, writer);
 
     var el = try app.renderUI(&renderContext.terminal);
     try renderer.render(gpa, &renderContext, el, writer);
 
     while (true) {
-        const pollData, const readData = try renderContext.terminal.pollEvents();
+        const pollData, const readData = try renderContext.terminalInfo.pollEvents();
 
         if (pollData.includes(.Resize)) {
-            const size = try termMod.Terminal.getTermSize();
+            const size = try termMod.TerminalInfo.getTermSize();
             try renderContext.onTerminalResize(size);
             renderContext.prepareForReRender();
             el = try app.renderUI(&renderContext.terminal);
