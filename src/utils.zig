@@ -55,3 +55,58 @@ pub fn setNonblocking(fd: std.posix.fd_t) !void {
     const newFlags: c_int = @bitCast(o);
     if (std.c.fcntl(fd, std.c.F.SETFL, newFlags) < 0) return error.FcntlFailed;
 }
+
+pub fn structFieldsToType(comptime Struct: type, comptime ToType: type) type {
+    const structTypeBefore = @typeInfo(Struct);
+    if (structTypeBefore != .@"struct") @compileError("Expected struct for index transform");
+    const structType = structTypeBefore.@"struct";
+
+    var fieldNames: [structType.fields.len][]const u8 = undefined;
+    var fieldTypes: [structType.fields.len]type = undefined;
+    var fieldAttributes: [structType.fields.len]std.builtin.Type.StructField.Attributes = undefined;
+
+    inline for (structType.fields, 0..) |field, index| {
+        fieldNames[index] = field.name;
+        fieldTypes[index] = ToType;
+        fieldAttributes[index] = .{
+            .@"comptime" = false,
+            .@"align" = null,
+            .default_value_ptr = null,
+        };
+    }
+
+    return @Struct(.auto, null, &fieldNames, &fieldTypes, &fieldAttributes);
+}
+
+pub fn appendFieldToStruct(
+    comptime Struct: type,
+    comptime newField: struct {
+        name: []const u8,
+        type: type,
+        attributes: std.builtin.Type.StructField.Attributes,
+    },
+) type {
+    const structTypeBefore = @typeInfo(Struct);
+    if (structTypeBefore != .@"struct") @compileError("Expected struct for index transform");
+    const structType = structTypeBefore.@"struct";
+
+    var fieldNames: [structType.fields.len + 1][]const u8 = undefined;
+    var fieldTypes: [structType.fields.len + 1]type = undefined;
+    var fieldAttributes: [structType.fields.len + 1]std.builtin.Type.StructField.Attributes = undefined;
+
+    inline for (structType.fields, 0..) |field, index| {
+        fieldNames[index] = field.name;
+        fieldTypes[index] = field.type;
+        fieldAttributes[index] = .{
+            .@"comptime" = false,
+            .@"align" = null,
+            .default_value_ptr = null,
+        };
+    }
+
+    fieldNames[fieldNames.len - 1] = newField.name;
+    fieldTypes[fieldTypes.len - 1] = newField.type;
+    fieldAttributes[fieldAttributes.len - 1] = newField.attributes;
+
+    return @Struct(.auto, null, &fieldNames, &fieldTypes, &fieldAttributes);
+}
