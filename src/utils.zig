@@ -69,13 +69,19 @@ pub fn structFieldsToType(comptime Struct: type, comptime ToType: type) type {
         fieldNames[index] = field.name;
         fieldTypes[index] = ToType;
         fieldAttributes[index] = .{
-            .@"comptime" = false,
-            .@"align" = null,
-            .default_value_ptr = null,
+            .@"comptime" = field.is_comptime,
+            .@"align" = field.alignment,
+            .default_value_ptr = field.default_value_ptr,
         };
     }
 
-    return @Struct(.auto, null, &fieldNames, &fieldTypes, &fieldAttributes);
+    return @Struct(
+        structType.layout,
+        structType.backing_integer,
+        &fieldNames,
+        &fieldTypes,
+        &fieldAttributes,
+    );
 }
 
 pub fn appendFieldToStruct(
@@ -98,9 +104,9 @@ pub fn appendFieldToStruct(
         fieldNames[index] = field.name;
         fieldTypes[index] = field.type;
         fieldAttributes[index] = .{
-            .@"comptime" = false,
-            .@"align" = null,
-            .default_value_ptr = null,
+            .@"comptime" = field.is_comptime,
+            .@"align" = field.alignment,
+            .default_value_ptr = field.default_value_ptr,
         };
     }
 
@@ -108,5 +114,11 @@ pub fn appendFieldToStruct(
     fieldTypes[fieldTypes.len - 1] = newField.type;
     fieldAttributes[fieldAttributes.len - 1] = newField.attributes;
 
-    return @Struct(.auto, null, &fieldNames, &fieldTypes, &fieldAttributes);
+    return @Struct(
+        structType.layout,
+        structType.backing_integer,
+        &fieldNames,
+        &fieldTypes,
+        &fieldAttributes,
+    );
 }

@@ -7,7 +7,10 @@ const sequences = @import("sequences.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
-const PollEventPipeFds = [2]std.posix.fd_t;
+const PollEventPipeFds = struct {
+    read: std.posix.fd_t,
+    write: std.posix.fd_t,
+};
 const PollEventsCollectionAllFds = struct {
     resize: PollEventPipeFds,
     stateChange: PollEventPipeFds,
@@ -29,11 +32,10 @@ const PollEventsCollectionReadFds = utils.structFieldsToType(
     std.posix.fd_t,
 );
 
-const PollEventsCollectionPollFds = utils.structFieldsToType(PollEventsCollectionReadFds, std.posix.pollfd);
-
-const PollEventsPollFdsArr = [@typeInfo(PollEventsCollectionPollFds).@"struct".fields.len]std.posix.pollfd;
-const PollFdsDataIndices = utils.structFieldsToType(PollEventsCollectionPollFds, usize);
-var pollFdsDataIndices: PollFdsDataIndices = undefined;
+const PollEventsCollectionPollFds = utils.structFieldsToType(
+    PollEventsCollectionReadFds,
+    std.posix.pollfd,
+);
 
 const PollEvents = enum(u8) {
     Resize = 0b1,
@@ -87,7 +89,7 @@ pub const TerminalInfo = struct {
 
     size: utils.Size,
     pollFds: PollEventsCollectionAllFds,
-    pollEventData: PollEventsPollFdsArr,
+    pollEventData: PollEventsCollectionPollFds,
     pollArena: std.heap.ArenaAllocator,
     renderArena: std.heap.ArenaAllocator,
 
@@ -101,20 +103,19 @@ pub const TerminalInfo = struct {
         const resizeFds = try Self.initPipeFds();
         const stateChangeFds = try Self.initPipeFds();
         writeFds = .{
-            .resize = resizeFds[1],
-            .stateChange = stateChangeFds[1],
+            .resize = resizeFds.write,
+            .stateChange = stateChangeFds.write,
         };
 
         Self.initResizeEvent();
         const stdinFd = std.Io.File.stdin().handle;
         const pollFds: PollEventsCollectionReadFds = .{
             .stdin = stdinFd,
-            .resize = resizeFds[0],
-            .stateChange = stateChangeFds[0],
+            .resize = resizeFds.read,
+            .stateChange = stateChangeFds.read,
         };
 
-        const pollEventData, const pollDataIndices = Self.getPollFds(pollFds);
-        pollFdsDataIndices = pollDataIndices;
+        const pollEventData = Self.getPollFds(pollFds);
 
         const pollPipeFds = PollEventsCollectionAllFds{
             .resize = resizeFds,
@@ -156,24 +157,26 @@ pub const TerminalInfo = struct {
         }
     }
 
-    fn initPipeFds() ![2]std.posix.fd_t {
+    fn initPipeFds() !PollEventPipeFds {
         var pipeFds: [2]std.posix.fd_t = undefined;
         if (std.c.pipe(&pipeFds) < 0) return error.PipeFailed;
         try utils.setNonblocking(pipeFds[0]);
         try utils.setNonblocking(pipeFds[1]);
-        return pipeFds;
+        return .{ .read = pipeFds[0], .write = pipeFds[1] };
     }
 
-    fn getPollFds(readFds: PollEventsCollectionReadFds) struct { PollEventsPollFdsArr, PollFdsDataIndices } {
-        var pollFds: PollEventsPollFdsArr = undefined;
-        var pollFdsIndices: PollFdsDataIndices = undefined;
+    fn getPollFds(readFds: PollEventsCollectionReadFds) PollEventsCollectionPollFds {
+        var pollFds: PollEventsCollectionPollFds = undefined;
 
-        inline for (@typeInfo(PollEventsCollectionReadFds).@"struct".fields, 0..) |field, index| {
-            pollFds[index] = .{ .fd = @field(readFds, field.name), .events = std.posix.POLL.IN, .revents = 0 };
-            @field(pollFdsIndices, field.name) = index;
+        inline for (@typeInfo(PollEventsCollectionReadFds).@"struct".fields) |field| {
+            @field(pollFds, field.name) = .{
+                .fd = @field(readFds, field.name),
+                .events = std.posix.POLL.IN,
+                .revents = 0,
+            };
         }
 
-        return .{ pollFds, pollFdsIndices };
+        return pollFds;
     }
 
     fn initResizeEvent() void {
@@ -188,8 +191,8 @@ pub const TerminalInfo = struct {
     fn deinitPollEvents(self: Self) void {
         inline for (@typeInfo(PollEventsCollectionAllFds).@"struct".fields) |field| {
             const fds = @field(self.pollFds, field.name);
-            _ = std.c.close(fds[0]);
-            _ = std.c.close(fds[1]);
+            _ = std.c.close(fds.read);
+            _ = std.c.close(fds.write);
         }
     }
 
@@ -205,15 +208,15 @@ pub const TerminalInfo = struct {
 
         _ = self.pollArena.reset(.retain_capacity);
         const allocator = self.pollArena.allocator();
-        _ = try std.posix.poll(&self.pollEventData, -1);
+        _ = try std.posix.poll(@ptrCast(&self.pollEventData), -1);
 
         var pollData = PollEventData.init();
         var readData: []const u8 = &.{};
 
-        if ((self.pollEventData[pollFdsDataIndices.resize].revents & std.posix.POLL.IN) != 0) {
+        if ((self.pollEventData.resize.revents & std.posix.POLL.IN) != 0) {
             var drainBuf: [64]u8 = undefined;
             while (true) {
-                _ = std.posix.read(self.pollFds.resize[0], &drainBuf) catch |err| switch (err) {
+                _ = std.posix.read(self.pollFds.resize.read, &drainBuf) catch |err| switch (err) {
                     error.WouldBlock => break,
                     else => return err,
                 };
@@ -221,7 +224,7 @@ pub const TerminalInfo = struct {
             pollData.append(.Resize);
         }
 
-        if ((self.pollEventData[pollFdsDataIndices.stdin].revents & std.posix.POLL.IN) != 0) a: {
+        if ((self.pollEventData.stdin.revents & std.posix.POLL.IN) != 0) a: {
             var buf: [64]u8 = undefined;
             const bytesRead = std.posix.read(stdinFd, &buf) catch |err| switch (err) {
                 error.WouldBlock => break :a,
