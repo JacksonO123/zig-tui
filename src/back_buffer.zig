@@ -59,7 +59,6 @@ pub const BackBuffer = struct {
         size: utils.Size,
     ) !void {
         const preAdjust = ui.getPreAdjustment(element.styles);
-        const postAdjust = ui.getPostAdjustment(element.styles);
         const simpleStyles = element.styles.toSimpleStyles();
 
         {
@@ -82,51 +81,18 @@ pub const BackBuffer = struct {
 
         switch (element.variant) {
             .Text => |text| {
-                var renderPos = utils.Pos{
+                const basePos = utils.Pos{
                     .x = element.layoutInfo.x + preAdjust.width,
                     .y = element.layoutInfo.y + preAdjust.height,
                 };
 
-                var currentHeight = preAdjust.height + postAdjust.height;
-                const baseCurrentWidth = preAdjust.width + postAdjust.width;
-                var currentWidth = baseCurrentWidth;
-
-                var i: usize = 0;
-                while (i < text.data.len) : (i += 1) {
-                    const char = text.data[i];
-
-                    if (currentHeight >= element.layoutInfo.height) {
-                        break;
+                for (text.renderedData, 0..) |line, lineIndex| {
+                    for (line, 0..) |char, charIndex| {
+                        try self.writeCharAtPos(allocator, size, .{
+                            .x = basePos.x + @as(u16, @intCast(charIndex)),
+                            .y = basePos.y + @as(u16, @intCast(lineIndex)),
+                        }, char, simpleStyles);
                     }
-
-                    if (char == '\n') {
-                        renderPos.x = element.layoutInfo.x + preAdjust.width;
-                        currentWidth = baseCurrentWidth;
-                        renderPos.y += 1;
-                        currentHeight += 1;
-                        continue;
-                    }
-
-                    if (currentWidth >= element.layoutInfo.width) {
-                        while (i < text.data.len and text.data[i] != '\n') : (i += 1) {}
-
-                        if (i >= text.data.len or text.data[i] != '\n') break;
-
-                        renderPos.x = element.layoutInfo.x + preAdjust.width;
-                        currentWidth = baseCurrentWidth;
-                        renderPos.y += 1;
-                        currentHeight += 1;
-
-                        if (currentHeight >= element.layoutInfo.height) {
-                            break;
-                        }
-
-                        continue;
-                    }
-
-                    try self.writeCharAtPos(allocator, size, renderPos, char, simpleStyles);
-                    renderPos.x += 1;
-                    currentWidth += 1;
                 }
             },
             .Layout => |layout| {

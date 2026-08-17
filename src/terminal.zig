@@ -60,11 +60,11 @@ pub const TerminalInfo = struct {
     resizeFds: ResizeFds,
     pollFds: PollFds,
     pollArena: std.heap.ArenaAllocator,
-    termArena: std.heap.ArenaAllocator,
+    renderArena: std.heap.ArenaAllocator,
 
     pub fn init(allocator: Allocator, config: configMod.Config, writer: *Writer) !Self {
         const pollArena = std.heap.ArenaAllocator.init(allocator);
-        const termArena = std.heap.ArenaAllocator.init(allocator);
+        const renderArena = std.heap.ArenaAllocator.init(allocator);
 
         const size = try Self.getTermSize();
         try Self.setTermBehavior(config, writer);
@@ -79,7 +79,7 @@ pub const TerminalInfo = struct {
             .resizeFds = resizeFds,
             .pollFds = pollFds,
             .pollArena = pollArena,
-            .termArena = termArena,
+            .renderArena = renderArena,
         };
     }
 

@@ -32,7 +32,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
     _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
 
-    // const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
+    const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
 
     // var styledLine = try ui.Text.fromConstText(allocator, "bold+italic+underline");
     // _ = styledLine.styles.bold().italic().underline();
@@ -51,10 +51,10 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
 
     return try ui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{block},
+        &.{ block, plain },
         &.{.{
             .width = .{
-                .Ratio = .{ .numerator = 3, .denominator = 4 },
+                .Percent = 0.5,
             },
         }},
         .Horizontal,

@@ -43,11 +43,14 @@ pub const Text = struct {
     const Self = @This();
 
     data: []const u8,
+    /// do not rely on this ptr
+    renderedData: [][]u8,
 
     pub fn fromConstText(allocator: Allocator, str: []const u8) !*UIElement {
         const el = UIElement.fromVariant(.{
             .Text = .{
                 .data = str,
+                .renderedData = &.{},
             },
         });
         return el.alloc(allocator);
@@ -150,10 +153,12 @@ pub const Layout = union(LayoutTypes) {
 };
 
 pub fn setElementDimensions(
+    allocator: Allocator,
     element: *UIElement,
     sizeConstraint: utils.Size,
+    constraint: Constraint,
     writePos: utils.Pos,
-) void {
+) !void {
     var elInfo: ElementLayoutInfo = .{
         .x = writePos.x,
         .y = writePos.y,
@@ -166,6 +171,10 @@ pub fn setElementDimensions(
         .Text => |text| {
             var currentX: u16 = 0;
             var i: usize = 0;
+
+            var lines: std.ArrayList([]u8) = .empty;
+            var line: std.ArrayList(u8) = .empty;
+
             while (i < text.data.len) : (i += 1) {
                 const char = text.data[i];
 
@@ -175,8 +184,11 @@ pub fn setElementDimensions(
                         break;
                     }
 
+                    try lines.append(allocator, line.items);
+                    line = .empty;
                     elInfo.height += 1;
                     currentX = 0;
+
                     continue;
                 }
 
@@ -190,16 +202,34 @@ pub fn setElementDimensions(
                         break;
                     }
 
+                    try lines.append(allocator, line.items);
+                    line = .empty;
                     elInfo.height += 1;
                     currentX = 0;
+
                     continue;
                 }
 
+                try line.append(allocator, char);
                 currentX += 1;
                 elInfo.width = @max(elInfo.width, currentX);
             }
 
-            elInfo.width = @max(elInfo.width + preAdjust.width + postAdjust.width, sizeConstraint.width);
+            if (line.items.len > 0) {
+                try lines.append(allocator, line.items);
+            }
+
+            element.variant.Text.renderedData = lines.items;
+
+            const maxWithConstraint = switch (constraint.width) {
+                .Value, .Percent, .Ratio => true,
+                .Max, .Min, .None => false,
+            };
+            const finalElWidth = elInfo.width + preAdjust.width + postAdjust.width;
+            elInfo.width = if (maxWithConstraint)
+                @max(finalElWidth, sizeConstraint.width)
+            else
+                finalElWidth;
             elInfo.height += preAdjust.height + postAdjust.height;
         },
         .Layout => |layout| {
@@ -209,17 +239,23 @@ pub fn setElementDimensions(
             switch (layout) {
                 .Horizontal => |layoutInfo| {
                     for (layoutInfo.elements, 0..) |el, index| {
-                        const constraint = layoutInfo.getConstraint(index);
-                        const newSizeConstraint = if (constraint) |cons|
-                            getSizeConstraint(sizeConstraint, cons)
+                        const layoutConstraint = layoutInfo.getConstraint(index);
+                        const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons|
+                            .{ getSizeConstraint(sizeConstraint, cons), cons }
                         else
-                            sizeConstraint;
+                            .{ sizeConstraint, constraint };
 
                         const innerElPos = utils.Pos{
                             .x = elInfo.x + preAdjust.width + elInfo.width,
                             .y = elInfo.y + preAdjust.height,
                         };
-                        setElementDimensions(el, newSizeConstraint, innerElPos);
+                        try setElementDimensions(
+                            allocator,
+                            el,
+                            newSizeConstraint,
+                            newElConstraint,
+                            innerElPos,
+                        );
                         elInfo.width += el.layoutInfo.width;
                         elInfo.height = @max(elInfo.height, el.layoutInfo.height);
                     }
@@ -234,7 +270,13 @@ pub fn setElementDimensions(
                             .x = elInfo.x + preAdjust.width,
                             .y = elInfo.y + preAdjust.height + elInfo.height,
                         };
-                        setElementDimensions(el, sizeConstraint, innerElPos);
+                        try setElementDimensions(
+                            allocator,
+                            el,
+                            sizeConstraint,
+                            constraint,
+                            innerElPos,
+                        );
                         elInfo.height += el.layoutInfo.height;
                         elInfo.width = @max(elInfo.width, el.layoutInfo.width);
                     }

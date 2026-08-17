@@ -27,7 +27,13 @@ pub fn render(
     }
 
     try context.backBuffer.reset(allocator, context.terminalInfo.size);
-    ui.setElementDimensions(el, context.terminalInfo.size, .{});
+    try ui.setElementDimensions(
+        context.terminalInfo.renderArena.allocator(),
+        el,
+        context.terminalInfo.size,
+        .{},
+        .{},
+    );
     try context.backBuffer.renderInBuffer(allocator, el, context.terminalInfo.size);
     try writeDiff(allocator, context, context.terminalInfo.size, writer);
 

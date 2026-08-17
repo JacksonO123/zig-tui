@@ -33,7 +33,7 @@ pub const RenderContext = struct {
         writer: *Writer,
     ) !Self {
         var terminalInfo = try terminalMod.TerminalInfo.init(globalArena, config, writer);
-        const terminal = terminalMod.Terminal.init(terminalInfo.termArena.allocator(), gpa);
+        const terminal = terminalMod.Terminal.init(terminalInfo.renderArena.allocator(), gpa);
 
         return .{
             .terminal = terminal,
@@ -56,6 +56,6 @@ pub const RenderContext = struct {
     }
 
     pub fn prepareForReRender(self: *Self) void {
-        _ = self.terminalInfo.termArena.reset(.retain_capacity);
+        _ = self.terminalInfo.renderArena.reset(.retain_capacity);
     }
 };
