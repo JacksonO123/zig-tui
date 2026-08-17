@@ -2,10 +2,12 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
+const app = @import("app.zig");
 const configMod = @import("config.zig");
 const sequences = @import("sequences.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
+const context = @import("context.zig");
 
 const PollEventPipeFds = struct {
     read: std.posix.fd_t,
@@ -40,9 +42,10 @@ const PollEventsCollectionPollFds = utils.structFieldsToType(
 const PollEvents = enum(u8) {
     Resize = 0b1,
     Stdin = 0b10,
+    StateChange = 0b100,
 };
 
-const PollEventData = struct {
+pub const PollEventData = struct {
     const Self = @This();
 
     data: @typeInfo(PollEvents).@"enum".tag_type,
@@ -55,33 +58,41 @@ const PollEventData = struct {
         return self.data & @intFromEnum(flag) != 0;
     }
 
-    fn append(self: *Self, flag: PollEvents) void {
+    pub fn append(self: *Self, flag: PollEvents) void {
         self.data |= @intFromEnum(flag);
     }
 };
 
-const WriteFds = struct {
+pub const WriteFds = struct {
     resize: std.posix.fd_t,
     stateChange: std.posix.fd_t,
 };
-
-var writeFds: WriteFds = undefined;
 
 pub const Terminal = struct {
     const Self = @This();
 
     renderAlloc: Allocator,
     gpa: Allocator,
+    model: *app.Model,
 
-    pub inline fn init(allocator: Allocator, gpa: Allocator) Self {
-        return .{ .renderAlloc = allocator, .gpa = gpa };
+    pub fn init(allocator: Allocator, model: *app.Model, gpa: Allocator) Self {
+        return .{ .renderAlloc = allocator, .gpa = gpa, .model = model };
+    }
+
+    pub fn stateChanged() void {
+        if (context.globalState.rendering) {
+            context.globalState.needsRerender = true;
+        } else {
+            const byte: u8 = 1;
+            _ = std.c.write(context.globalState.writeFds.stateChange, @ptrCast(&byte), 1);
+        }
     }
 };
 
 fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
     _ = sig;
     const byte: u8 = 1;
-    _ = std.c.write(writeFds.resize, @ptrCast(&byte), 1);
+    _ = std.c.write(context.globalState.writeFds.resize, @ptrCast(&byte), 1);
 }
 
 pub const TerminalInfo = struct {
@@ -97,12 +108,13 @@ pub const TerminalInfo = struct {
         const pollArena = std.heap.ArenaAllocator.init(allocator);
         const renderArena = std.heap.ArenaAllocator.init(allocator);
 
-        const size = try Self.getTermSize();
+        const size = try utils.getTermSize();
         try Self.setTermBehavior(config, writer);
 
         const resizeFds = try Self.initPipeFds();
         const stateChangeFds = try Self.initPipeFds();
-        writeFds = .{
+
+        context.globalState.writeFds = .{
             .resize = resizeFds.write,
             .stateChange = stateChangeFds.write,
         };
@@ -115,7 +127,7 @@ pub const TerminalInfo = struct {
             .stateChange = stateChangeFds.read,
         };
 
-        const pollEventData = Self.getPollFds(pollFds);
+        const pollEventData = Self.pollFdsToEventData(pollFds);
 
         const pollPipeFds = PollEventsCollectionAllFds{
             .resize = resizeFds,
@@ -134,16 +146,6 @@ pub const TerminalInfo = struct {
     pub fn deinit(self: *Self, writer: *Writer) void {
         self.deinitPollEvents();
         Self.deinitTermBehavior(writer) catch {};
-    }
-
-    pub fn getTermSize() !utils.Size {
-        var winSize: std.posix.winsize = undefined;
-        const fd = std.Io.File.stdout().handle;
-        const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winSize));
-        if (std.posix.errno(err) != .SUCCESS) {
-            return error.IoctlFailed;
-        }
-        return .{ .height = winSize.row, .width = winSize.col };
     }
 
     fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
@@ -165,7 +167,7 @@ pub const TerminalInfo = struct {
         return .{ .read = pipeFds[0], .write = pipeFds[1] };
     }
 
-    fn getPollFds(readFds: PollEventsCollectionReadFds) PollEventsCollectionPollFds {
+    fn pollFdsToEventData(readFds: PollEventsCollectionReadFds) PollEventsCollectionPollFds {
         var pollFds: PollEventsCollectionPollFds = undefined;
 
         inline for (@typeInfo(PollEventsCollectionReadFds).@"struct".fields) |field| {
@@ -203,17 +205,17 @@ pub const TerminalInfo = struct {
         try writer.flush();
     }
 
-    pub fn pollEvents(self: *Self) !struct { PollEventData, []const u8 } {
+    pub fn pollEvents(self: *Self, timeout: i32) !struct { PollEventData, []const u8 } {
         const stdinFd = std.Io.File.stdin().handle;
 
         _ = self.pollArena.reset(.retain_capacity);
         const allocator = self.pollArena.allocator();
-        _ = try std.posix.poll(@ptrCast(&self.pollEventData), -1);
+        _ = try std.posix.poll(@ptrCast(&self.pollEventData), timeout);
 
         var pollData = PollEventData.init();
         var readData: []const u8 = &.{};
 
-        if ((self.pollEventData.resize.revents & std.posix.POLL.IN) != 0) {
+        if (utils.pollFdHasInEvent(self.pollEventData.resize)) {
             var drainBuf: [64]u8 = undefined;
             while (true) {
                 _ = std.posix.read(self.pollFds.resize.read, &drainBuf) catch |err| switch (err) {
@@ -224,7 +226,7 @@ pub const TerminalInfo = struct {
             pollData.append(.Resize);
         }
 
-        if ((self.pollEventData.stdin.revents & std.posix.POLL.IN) != 0) a: {
+        if (utils.pollFdHasInEvent(self.pollEventData.stdin)) a: {
             var buf: [64]u8 = undefined;
             const bytesRead = std.posix.read(stdinFd, &buf) catch |err| switch (err) {
                 error.WouldBlock => break :a,
@@ -237,6 +239,21 @@ pub const TerminalInfo = struct {
 
             const clonedData = try allocator.dupe(u8, buf[0..bytesRead]);
             readData = clonedData;
+        }
+
+        if (utils.pollFdHasInEvent(self.pollEventData.stateChange)) {
+            var buf: [64]u8 = undefined;
+            while (true) {
+                _ = std.posix.read(
+                    self.pollFds.stateChange.read,
+                    &buf,
+                ) catch |err| switch (err) {
+                    error.WouldBlock => break,
+                    else => return err,
+                };
+            }
+
+            pollData.append(.StateChange);
         }
 
         return .{ pollData, readData };

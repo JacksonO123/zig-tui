@@ -1,15 +1,31 @@
 const std = @import("std");
 const Writer = std.Io.Writer;
 
-const config = @import("config.zig");
+const configMod = @import("config.zig");
 const sequences = @import("sequences.zig");
 const styles = @import("styles.zig");
 const terminalMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
+pub const config: configMod.Config = .{};
+
+pub const Model = struct {
+    const Self = @This();
+
+    count: usize,
+
+    pub fn init() Self {
+        return .{ .count = 0 };
+    }
+};
+
 pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     const allocator = terminal.renderAlloc;
+    defer {
+        terminal.model.count += 1;
+        terminalMod.Terminal.stateChanged();
+    }
 
     // var someText = try ui.Text.fromConstText(allocator, "some lo\nng tex\nt that\n is lon\nger th\nan 10\n ch\nars");
     // _ = someText.styles.border(.Square);
@@ -32,7 +48,12 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
     _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
 
-    const plain = try ui.Text.fromConstText(allocator, "plain text, no styles");
+    const fmtString = try std.fmt.allocPrint(
+        terminal.renderAlloc,
+        "plain text, no styles: {d}",
+        .{terminal.model.count},
+    );
+    const plain = try ui.Text.fromConstText(allocator, fmtString);
 
     // var styledLine = try ui.Text.fromConstText(allocator, "bold+italic+underline");
     // _ = styledLine.styles.bold().italic().underline();
@@ -60,5 +81,3 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
         .Horizontal,
     );
 }
-
-pub const mockConfig: config.Config = .{};

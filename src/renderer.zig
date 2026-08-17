@@ -2,13 +2,24 @@ const std = @import("std");
 const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
 
+const app = @import("app.zig");
+const bufferUtil = @import("buffer.zig");
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const sequences = @import("sequences.zig");
 const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
-const bufferUtil = @import("buffer.zig");
+
+pub fn handleRender(gpa: Allocator, renderContext: *RenderContext, writer: *Writer) !void {
+    const size = try utils.getTermSize();
+    try renderContext.onTerminalResize(size);
+    renderContext.prepareForReRender();
+    contextMod.globalState.rendering = true;
+    const el = try app.renderUI(&renderContext.terminal);
+    try render(gpa, renderContext, el, writer);
+    contextMod.globalState.rendering = false;
+}
 
 pub fn render(
     allocator: Allocator,
@@ -22,7 +33,7 @@ pub fn render(
         try sequences.setCursorPos(context, 1, 1, writer);
     }
 
-    if (context.state.forceReRender) {
+    if (context.state.forceFullRender) {
         try sequences.eraseDisplayAfterCursor(writer);
     }
 
@@ -43,7 +54,7 @@ pub fn render(
     try sequences.eraseDisplayAfterCursor(writer);
 
     context.state.rowOffset = @as(i32, @intCast(context.backBuffer.lineLimit)) + 1;
-    context.state.forceReRender = false;
+    context.state.forceFullRender = false;
 
     try writer.flush();
 }
@@ -63,7 +74,7 @@ fn writeDiff(
         for (frontLine.items, backLine.items, 0..) |frontCell, backCell, cellIndex| {
             if (cellIndex >= size.width - 1) break;
 
-            if (context.state.forceReRender or !frontCell.compareTo(backCell)) {
+            if (context.state.forceFullRender or !frontCell.compareTo(backCell)) {
                 if (atCol < cellIndex) {
                     try sequences.setCursorCol(cellIndex + 1, writer);
                 }

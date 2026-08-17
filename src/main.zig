@@ -25,27 +25,26 @@ pub fn main(init: std.process.Init) !void {
     var stdout = std.Io.File.stdout().writer(io, &stdoutBuf);
     const writer = &stdout.interface;
 
+    var model = app.Model.init();
     var renderContext = try context.RenderContext.init(
         gpa,
         globalArenaAllocator,
-        app.mockConfig,
+        app.config,
+        &model,
         writer,
     );
     defer renderContext.deinit(gpa, writer);
     errdefer renderContext.deinit(gpa, writer);
 
-    var el = try app.renderUI(&renderContext.terminal);
-    try renderer.render(gpa, &renderContext, el, writer);
-
     while (true) {
-        const pollData, const readData = try renderContext.terminalInfo.pollEvents();
+        const timeoutMs: i32 = if (context.globalState.needsRerender) 1 else -1;
+        const pollData, const readData = try renderContext.terminalInfo.pollEvents(timeoutMs);
 
-        if (pollData.includes(.Resize)) {
-            const size = try termMod.TerminalInfo.getTermSize();
-            try renderContext.onTerminalResize(size);
-            renderContext.prepareForReRender();
-            el = try app.renderUI(&renderContext.terminal);
-            try renderer.render(gpa, &renderContext, el, writer);
+        const neededRerender = context.globalState.needsRerender;
+        context.globalState.needsRerender = false;
+
+        if (pollData.includes(.Resize) or pollData.includes(.StateChange) or neededRerender) {
+            try renderer.handleRender(gpa, &renderContext, writer);
         }
 
         if (pollData.includes(.Stdin)) {

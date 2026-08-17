@@ -9,15 +9,25 @@ const sequences = @import("sequences.zig");
 const terminalMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
+const app = @import("app.zig");
+
+pub const GlobalState = struct {
+    writeFds: terminalMod.WriteFds,
+    needsRerender: bool = true,
+    rendering: bool = false,
+};
+
+pub var globalState: GlobalState = .{ .writeFds = undefined };
 
 pub const RenderState = struct {
     rowOffset: i32 = 1,
-    forceReRender: bool = false,
+    forceFullRender: bool = false,
 };
 
 pub const RenderContext = struct {
     const Self = @This();
 
+    model: *app.Model,
     config: configMod.Config,
     terminal: terminalMod.Terminal,
     backBuffer: backBufferMod.BackBuffer,
@@ -30,10 +40,15 @@ pub const RenderContext = struct {
         gpa: Allocator,
         globalArena: Allocator,
         config: configMod.Config,
+        model: *app.Model,
         writer: *Writer,
     ) !Self {
         var terminalInfo = try terminalMod.TerminalInfo.init(globalArena, config, writer);
-        const terminal = terminalMod.Terminal.init(terminalInfo.renderArena.allocator(), gpa);
+        const terminal = terminalMod.Terminal.init(
+            terminalInfo.renderArena.allocator(),
+            model,
+            gpa,
+        );
 
         return .{
             .terminal = terminal,
@@ -41,6 +56,7 @@ pub const RenderContext = struct {
             .config = config,
             .backBuffer = try backBufferMod.BackBuffer.init(gpa, terminalInfo.size),
             .frontBuffer = .empty,
+            .model = model,
         };
     }
 
@@ -52,7 +68,7 @@ pub const RenderContext = struct {
 
     pub fn onTerminalResize(self: *Self, size: utils.Size) !void {
         self.terminalInfo.size = size;
-        self.state.forceReRender = true;
+        self.state.forceFullRender = true;
     }
 
     pub fn prepareForReRender(self: *Self) void {
