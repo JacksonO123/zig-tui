@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const backBufferMod = @import("back_buffer.zig");
+const configMod = @import("config.zig");
 
 pub const Size = struct {
     height: u16 = 0,
@@ -130,7 +131,10 @@ pub fn getTermSize() !Size {
     if (std.posix.errno(err) != .SUCCESS) {
         return error.IoctlFailed;
     }
-    return .{ .height = winSize.row, .width = winSize.col };
+    return .{
+        .height = winSize.row,
+        .width = winSize.col,
+    };
 }
 
 pub fn pollFdHasInEvent(fd: std.posix.pollfd) bool {

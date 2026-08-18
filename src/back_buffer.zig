@@ -142,33 +142,38 @@ pub const BackBuffer = struct {
                 simpleStyles,
             );
 
-            pos.x = layoutInfo.x + layoutInfo.width - 1;
-            try self.writeUnicodeAtPos(
-                allocator,
-                size,
-                pos,
-                borderStyles.corners.topRight,
-                simpleStyles,
-            );
+            if (layoutInfo.width > 0) {
+                pos.x = layoutInfo.x + layoutInfo.width - 1;
+                try self.writeUnicodeAtPos(
+                    allocator,
+                    size,
+                    pos,
+                    borderStyles.corners.topRight,
+                    simpleStyles,
+                );
 
-            pos.x = layoutInfo.x;
-            pos.y = layoutInfo.y + layoutInfo.height - 1;
-            try self.writeUnicodeAtPos(
-                allocator,
-                size,
-                pos,
-                borderStyles.corners.bottomLeft,
-                simpleStyles,
-            );
+                pos.y = layoutInfo.y + layoutInfo.height - 1;
+                pos.x = layoutInfo.x + layoutInfo.width - 1;
+                try self.writeUnicodeAtPos(
+                    allocator,
+                    size,
+                    pos,
+                    borderStyles.corners.bottomRight,
+                    simpleStyles,
+                );
+            }
 
-            pos.x = layoutInfo.x + layoutInfo.width - 1;
-            try self.writeUnicodeAtPos(
-                allocator,
-                size,
-                pos,
-                borderStyles.corners.bottomRight,
-                simpleStyles,
-            );
+            if (layoutInfo.height > 0) {
+                pos.x = layoutInfo.x;
+                pos.y = layoutInfo.y + layoutInfo.height - 1;
+                try self.writeUnicodeAtPos(
+                    allocator,
+                    size,
+                    pos,
+                    borderStyles.corners.bottomLeft,
+                    simpleStyles,
+                );
+            }
 
             var horizontalBorder = bufferUtil.BufferChar{
                 .style = simpleStyles,
@@ -198,29 +203,37 @@ pub const BackBuffer = struct {
 
             a: {
                 const line = &self.buffer.items[layoutInfo.y];
-                if (layoutInfo.x + 1 >= line.items.len) break :a;
-                const cells = line.items[layoutInfo.x + 1 .. @min(
+                if (layoutInfo.width == 0 or layoutInfo.x + 1 >= line.items.len) break :a;
+                const from = layoutInfo.x + 1;
+                const to = @min(
                     layoutInfo.x + layoutInfo.width - 1,
                     line.items.len,
-                )];
-                @memset(cells, horizontalBorder);
+                );
+                if (from <= to) {
+                    const cells = line.items[from..to];
+                    @memset(cells, horizontalBorder);
+                }
             }
 
             a: {
                 const line = &self.buffer.items[layoutInfo.y + layoutInfo.height - 1];
-                if (layoutInfo.x + 1 >= line.items.len) break :a;
-                const cells = line.items[layoutInfo.x + 1 .. @min(
+                if (layoutInfo.width == 0 or layoutInfo.x + 1 >= line.items.len) break :a;
+                const from = layoutInfo.x + 1;
+                const to = @min(
                     layoutInfo.x + layoutInfo.width - 1,
                     line.items.len,
-                )];
-                @memset(cells, horizontalBorder);
+                );
+                if (from <= to) {
+                    const cells = line.items[from..to];
+                    @memset(cells, horizontalBorder);
+                }
             }
 
             var currentY: usize = layoutInfo.y + 1;
             const endY = layoutInfo.y + layoutInfo.height - 1;
             while (currentY < endY) : (currentY += 1) {
                 const line = self.buffer.items[currentY];
-                if (layoutInfo.x >= line.items.len) break;
+                if (layoutInfo.width == 0 or layoutInfo.x >= line.items.len) break;
                 const leftCell = &line.items[layoutInfo.x];
                 leftCell.* = verticalBorder;
 

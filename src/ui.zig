@@ -64,6 +64,7 @@ const ConstraintTypes = enum {
     Min,
     Max,
     None,
+    Fill,
 };
 
 const ConstraintValues = union(ConstraintTypes) {
@@ -76,6 +77,7 @@ const ConstraintValues = union(ConstraintTypes) {
     Min: u16,
     Max: u16,
     None,
+    Fill,
 };
 
 const Constraint = struct {
@@ -223,7 +225,7 @@ pub fn setElementDimensions(
 
             const maxWithConstraint = switch (constraint.width) {
                 .Value, .Percent, .Ratio => true,
-                .Max, .Min, .None => false,
+                .Max, .Min, .None, .Fill => false,
             };
             const finalElWidth = elInfo.width + preAdjust.width + postAdjust.width;
             elInfo.width = if (maxWithConstraint)
@@ -238,10 +240,26 @@ pub fn setElementDimensions(
 
             switch (layout) {
                 .Horizontal => |layoutInfo| {
+                    var fillWidthIndices: std.ArrayList(usize) = .empty;
+                    var fillHeightIndices: std.ArrayList(usize) = .empty;
+                    defer fillWidthIndices.deinit(allocator);
+                    defer fillHeightIndices.deinit(allocator);
+
+                    var possibleFillWidth = sizeConstraint.width;
+                    var possibleFillHeight = sizeConstraint.height;
+
                     for (layoutInfo.elements, 0..) |el, index| {
                         const layoutConstraint = layoutInfo.getConstraint(index);
                         const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons|
-                            .{ getSizeConstraint(sizeConstraint, cons), cons }
+                            .{
+                                getSizeConstraint(
+                                    sizeConstraint,
+                                    cons,
+                                    null,
+                                    null,
+                                ),
+                                cons,
+                            }
                         else
                             .{ sizeConstraint, constraint };
 
@@ -258,6 +276,64 @@ pub fn setElementDimensions(
                         );
                         elInfo.width += el.layoutInfo.width;
                         elInfo.height = @max(elInfo.height, el.layoutInfo.height);
+
+                        if (index < layoutInfo.elements.len - 1) {
+                            elInfo.width += element.styles.styles.gap;
+                            possibleFillWidth -= element.styles.styles.gap;
+                        }
+
+                        if (layoutConstraint) |cons| {
+                            if (cons.width == .Fill) {
+                                try fillWidthIndices.append(allocator, index);
+                            } else {
+                                possibleFillWidth -= el.layoutInfo.width;
+                            }
+
+                            if (cons.height == .Fill) {
+                                try fillWidthIndices.append(allocator, index);
+                            } else {
+                                possibleFillHeight -= el.layoutInfo.height;
+                            }
+                        } else {
+                            possibleFillWidth -= el.layoutInfo.width;
+                            possibleFillHeight -= el.layoutInfo.height;
+                        }
+                    }
+
+                    const fillWidthPerEl = if (fillWidthIndices.items.len > 0)
+                        possibleFillWidth / @as(u16, @intCast(fillWidthIndices.items.len))
+                    else
+                        0;
+
+                    var widthAcc: u16 = 0;
+                    for (layoutInfo.elements, 0..) |el, index| {
+                        el.layoutInfo.x = elInfo.x + preAdjust.width + widthAcc;
+                        el.layoutInfo.y = elInfo.y + preAdjust.height;
+
+                        const layoutConstraint = layoutInfo.getConstraint(index);
+                        if (layoutConstraint) |cons| {
+                            const elPreAdjust = getPreAdjustment(el.styles);
+                            const elPostAdjust = getPostAdjustment(el.styles);
+
+                            if (cons.width == .Fill) {
+                                el.layoutInfo.width = @max(
+                                    fillWidthPerEl,
+                                    elPreAdjust.width + elPostAdjust.width,
+                                );
+                                trimTextElContentToWidth(
+                                    el,
+                                    if (fillWidthPerEl < elPreAdjust.width + elPostAdjust.width)
+                                        0
+                                    else
+                                        fillWidthPerEl - elPreAdjust.width - elPostAdjust.width,
+                                );
+                            }
+                        }
+
+                        widthAcc += el.layoutInfo.width;
+                        if (index < layoutInfo.elements.len - 1) {
+                            widthAcc += element.styles.styles.gap;
+                        }
                     }
                 },
                 .Vertical => |layoutInfo| {
@@ -288,7 +364,7 @@ pub fn setElementDimensions(
     element.layoutInfo = elInfo;
 }
 
-fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u16) u16 {
+fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u16, fillSize: ?u16) u16 {
     return switch (cons) {
         .Min => |value| @max(value, dimensionConstraint),
         .Max => |value| @min(value, dimensionConstraint),
@@ -303,15 +379,21 @@ fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u16) u16 {
             return @intFromFloat(width);
         },
         .Value => |value| value,
+        .Fill => if (fillSize) |size| size else dimensionConstraint,
         .None => dimensionConstraint,
     };
 }
 
-fn getSizeConstraint(currentSize: utils.Size, constraint: Constraint) utils.Size {
+fn getSizeConstraint(
+    currentSize: utils.Size,
+    constraint: Constraint,
+    fillWidthPerEl: ?u16,
+    fillHeightPerEl: ?u16,
+) utils.Size {
     var sizeCpy = currentSize;
 
-    sizeCpy.width = applySizeConstraint(constraint.width, sizeCpy.width);
-    sizeCpy.height = applySizeConstraint(constraint.height, sizeCpy.height);
+    sizeCpy.width = applySizeConstraint(constraint.width, sizeCpy.width, fillWidthPerEl);
+    sizeCpy.height = applySizeConstraint(constraint.height, sizeCpy.height, fillHeightPerEl);
 
     return sizeCpy;
 }
@@ -342,4 +424,12 @@ pub fn getPostAdjustment(styles: stylesMod.Styles) utils.Size {
     adjustment.height += styles.styles.padding.paddingBottom;
 
     return adjustment;
+}
+
+fn trimTextElContentToWidth(el: *UIElement, width: u16) void {
+    if (el.variant != .Text) return;
+
+    for (el.variant.Text.renderedData) |*line| {
+        line.len = @min(line.len, width);
+    }
 }

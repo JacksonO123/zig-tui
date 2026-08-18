@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 
 const app = @import("app.zig");
 const bufferUtil = @import("buffer.zig");
+const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const sequences = @import("sequences.zig");
@@ -11,7 +12,11 @@ const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
-pub fn handleRender(gpa: Allocator, renderContext: *RenderContext, writer: *Writer) !void {
+pub fn handleRender(
+    gpa: Allocator,
+    renderContext: *RenderContext,
+    writer: *Writer,
+) !void {
     const size = try utils.getTermSize();
     try renderContext.onTerminalResize(size);
     renderContext.prepareForReRender();
@@ -38,13 +43,17 @@ pub fn render(
     }
 
     try context.backBuffer.reset(allocator, context.terminalInfo.size);
-    try ui.setElementDimensions(
-        context.terminalInfo.renderArena.allocator(),
-        el,
-        context.terminalInfo.size,
-        .{},
-        .{},
-    );
+    {
+        var termSizeCopy = context.terminalInfo.size;
+        termSizeCopy.width -= 1;
+        try ui.setElementDimensions(
+            context.terminalInfo.renderArena.allocator(),
+            el,
+            termSizeCopy,
+            .{},
+            .{},
+        );
+    }
     try context.backBuffer.renderInBuffer(allocator, el, context.terminalInfo.size);
     try writeDiff(allocator, context, context.terminalInfo.size, writer);
 
