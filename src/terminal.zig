@@ -143,20 +143,31 @@ pub const TerminalInfo = struct {
         };
     }
 
-    pub fn deinit(self: *Self, writer: *Writer) void {
+    pub fn deinit(self: *Self, config: configMod.Config, writer: *Writer) void {
         self.deinitPollEvents();
-        Self.deinitTermBehavior(writer) catch {};
+        Self.deinitTermBehavior(config, writer) catch {};
     }
 
     fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
+        if (config.screenType == .Alternate) {
+            try sequences.enableAlternateScreen(writer);
+        }
+
         try utils.enableRawMode();
         try sequences.hideCursor(writer);
         try sequences.disableAutoWrap(writer);
+    }
 
-        if (config.screenType == .Fullscreen) {
-            try sequences.setCursorPosAbsolute(1, 1, writer);
-            try sequences.clearScreen(writer);
+    fn deinitTermBehavior(config: configMod.Config, writer: *Writer) !void {
+        try sequences.enableAutoWrap(writer);
+        try sequences.showCursor(writer);
+        utils.disableRawMode();
+
+        if (config.screenType == .Alternate) {
+            try sequences.disableAlternateScreen(writer);
         }
+
+        try writer.flush();
     }
 
     fn initPipeFds() !PollEventPipeFds {
@@ -196,13 +207,6 @@ pub const TerminalInfo = struct {
             _ = std.c.close(fds.read);
             _ = std.c.close(fds.write);
         }
-    }
-
-    fn deinitTermBehavior(writer: *Writer) !void {
-        try sequences.showCursor(writer);
-        utils.disableRawMode();
-        try sequences.enableAutoWrap(writer);
-        try writer.flush();
     }
 
     pub fn pollEvents(self: *Self, timeout: i32) !struct { PollEventData, []const u8 } {

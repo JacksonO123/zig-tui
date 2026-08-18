@@ -10,8 +10,8 @@ const configMod = @import("config.zig");
 const context = @import("context.zig");
 const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
-const utils = @import("utils.zig");
 const termMod = @import("terminal.zig");
+const utils = @import("utils.zig");
 
 var resizePipeWriteFd: std.posix.fd_t = -1;
 
@@ -29,12 +29,13 @@ pub fn main(init: std.process.Init) !void {
     var renderContext = try context.RenderContext.init(
         gpa,
         globalArenaAllocator,
+        io,
         app.config,
         &model,
         writer,
     );
-    defer renderContext.deinit(gpa, writer);
-    errdefer renderContext.deinit(gpa, writer);
+    defer renderContext.deinit(gpa, app.config, writer);
+    errdefer renderContext.deinit(gpa, app.config, writer);
 
     while (true) {
         const timeoutMs: i32 = if (context.globalState.needsRerender) 1 else -1;
@@ -43,7 +44,15 @@ pub fn main(init: std.process.Init) !void {
         const neededRerender = context.globalState.needsRerender;
         context.globalState.needsRerender = false;
 
-        if (pollData.includes(.Resize) or pollData.includes(.StateChange) or neededRerender) {
+        if (pollData.includes(.Resize)) {
+            const size = try utils.getTermSize();
+            renderContext.onTerminalResize(size);
+            try renderer.handleRender(gpa, &renderContext, writer);
+        }
+
+        if (pollData.includes(.StateChange) or neededRerender) {
+            const size = try utils.getTermSize();
+            renderContext.updateTerminalSize(size);
             try renderer.handleRender(gpa, &renderContext, writer);
         }
 

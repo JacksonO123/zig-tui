@@ -17,8 +17,6 @@ pub fn handleRender(
     renderContext: *RenderContext,
     writer: *Writer,
 ) !void {
-    const size = try utils.getTermSize();
-    try renderContext.onTerminalResize(size);
     renderContext.prepareForReRender();
     contextMod.globalState.rendering = true;
     const el = try app.renderUI(&renderContext.terminal);
@@ -32,7 +30,7 @@ pub fn render(
     el: *ui.UIElement,
     writer: *Writer,
 ) !void {
-    if (context.config.screenType == .Fullscreen) {
+    if (context.config.screenType == .Alternate) {
         try sequences.setCursorPosAbsolute(1, 1, writer);
     } else {
         try sequences.setCursorPos(context, 1, 1, writer);

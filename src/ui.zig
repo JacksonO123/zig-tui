@@ -295,8 +295,8 @@ pub fn setElementDimensions(
                                 possibleFillHeight -= el.layoutInfo.height;
                             }
                         } else {
-                            possibleFillWidth -= el.layoutInfo.width;
-                            possibleFillHeight -= el.layoutInfo.height;
+                            possibleFillWidth -= @min(el.layoutInfo.width, possibleFillWidth);
+                            possibleFillHeight -= @min(el.layoutInfo.height, possibleFillHeight);
                         }
                     }
 

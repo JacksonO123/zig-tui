@@ -8,15 +8,16 @@ const terminalMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
-pub const config: configMod.Config = .{};
+pub const config: configMod.Config = .{ .screenType = .Alternate };
 
 pub const Model = struct {
     const Self = @This();
 
-    count: usize,
+    count: usize = 0,
+    toRender: usize = 0,
 
     pub fn init() Self {
-        return .{ .count = 0 };
+        return .{};
     }
 };
 
@@ -24,6 +25,11 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     const allocator = terminal.renderAlloc;
     defer {
         terminal.model.count += 1;
+
+        if (terminal.model.count % 100 == 0) {
+            terminal.model.toRender = terminal.model.count;
+        }
+
         terminalMod.Terminal.stateChanged();
     }
 
@@ -33,7 +39,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     const fmtString = try std.fmt.allocPrint(
         terminal.renderAlloc,
         "plain text, no styles: {d}",
-        .{terminal.model.count},
+        .{terminal.model.toRender},
     );
     const plain = try ui.Text.fromConstText(allocator, fmtString);
 

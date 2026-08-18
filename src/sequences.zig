@@ -28,6 +28,9 @@ const Codes = struct {
 
     italicText: Str,
     disableItalicText: Str,
+
+    enableAlternateScreen: Str,
+    disableAlternateScreen: Str,
 };
 
 pub const codes: Codes = .{
@@ -51,6 +54,9 @@ pub const codes: Codes = .{
 
     .italicText = "\x1b[3m",
     .disableItalicText = "\x1b[23m",
+
+    .enableAlternateScreen = "\x1b[?1049h",
+    .disableAlternateScreen = "\x1b[?1049l",
 };
 
 pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writer) !void {
@@ -161,4 +167,12 @@ pub fn hideCursor(writer: *Writer) !void {
 
 pub fn showCursor(writer: *Writer) !void {
     try writer.writeAll(codes.showCursor);
+}
+
+pub fn enableAlternateScreen(writer: *Writer) !void {
+    try writer.writeAll(codes.enableAlternateScreen);
+}
+
+pub fn disableAlternateScreen(writer: *Writer) !void {
+    try writer.writeAll(codes.disableAlternateScreen);
 }

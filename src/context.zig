@@ -2,14 +2,15 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
+const app = @import("app.zig");
 const backBufferMod = @import("back_buffer.zig");
 const configMod = @import("config.zig");
 const frontBufferMod = @import("front_buffer.zig");
+const logMod = @import("logger.zig");
 const sequences = @import("sequences.zig");
 const terminalMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
-const app = @import("app.zig");
 
 pub const GlobalState = struct {
     writeFds: terminalMod.WriteFds,
@@ -33,12 +34,13 @@ pub const RenderContext = struct {
     backBuffer: backBufferMod.BackBuffer,
     frontBuffer: frontBufferMod.FrontBuffer,
     terminalInfo: terminalMod.TerminalInfo,
-
     state: RenderState = .{},
+    logger: logMod.Logger,
 
     pub inline fn init(
         gpa: Allocator,
         globalArena: Allocator,
+        io: std.Io,
         config: configMod.Config,
         model: *app.Model,
         writer: *Writer,
@@ -50,6 +52,8 @@ pub const RenderContext = struct {
             gpa,
         );
 
+        const logger = try logMod.Logger.init(globalArena, io);
+
         return .{
             .terminal = terminal,
             .terminalInfo = terminalInfo,
@@ -57,18 +61,28 @@ pub const RenderContext = struct {
             .backBuffer = try backBufferMod.BackBuffer.init(gpa, terminalInfo.size),
             .frontBuffer = .empty,
             .model = model,
+            .logger = logger,
         };
     }
 
-    pub fn deinit(self: *Self, allocator: Allocator, writer: *Writer) void {
+    pub fn deinit(
+        self: *Self,
+        allocator: Allocator,
+        config: configMod.Config,
+        writer: *Writer,
+    ) void {
         self.backBuffer.deinit(allocator);
         self.frontBuffer.deinit(allocator);
-        self.terminalInfo.deinit(writer);
+        self.terminalInfo.deinit(config, writer);
     }
 
-    pub fn onTerminalResize(self: *Self, size: utils.Size) !void {
-        self.terminalInfo.size = size;
+    pub fn onTerminalResize(self: *Self, size: utils.Size) void {
+        self.updateTerminalSize(size);
         self.state.forceFullRender = true;
+    }
+
+    pub fn updateTerminalSize(self: *Self, size: utils.Size) void {
+        self.terminalInfo.size = size;
     }
 
     pub fn prepareForReRender(self: *Self) void {

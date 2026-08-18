@@ -1,5 +1,4 @@
 pub const ScreenType = enum {
-    Fullscreen,
     Main,
     Alternate,
 };
