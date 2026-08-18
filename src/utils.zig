@@ -140,3 +140,7 @@ pub fn getTermSize() !Size {
 pub fn pollFdHasInEvent(fd: std.posix.pollfd) bool {
     return (fd.revents & std.posix.POLL.IN) != 0;
 }
+
+pub fn calculateRightPadding(config: configMod.Config) u16 {
+    return config.rightPadding orelse @as(u16, if (config.screenType == .Main) 1 else 0);
+}

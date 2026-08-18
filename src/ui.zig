@@ -1,6 +1,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const contextMod = @import("context.zig");
+const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
 const utils = @import("utils.zig");
 
@@ -156,6 +158,7 @@ pub const Layout = union(LayoutTypes) {
 
 pub fn setElementDimensions(
     allocator: Allocator,
+    context: *RenderContext,
     element: *UIElement,
     sizeConstraint: utils.Size,
     constraint: Constraint,
@@ -269,6 +272,7 @@ pub fn setElementDimensions(
                         };
                         try setElementDimensions(
                             allocator,
+                            context,
                             el,
                             newSizeConstraint,
                             newElConstraint,
@@ -295,18 +299,32 @@ pub fn setElementDimensions(
                                 possibleFillHeight -= el.layoutInfo.height;
                             }
                         } else {
-                            possibleFillWidth -= @min(el.layoutInfo.width, possibleFillWidth);
-                            possibleFillHeight -= @min(el.layoutInfo.height, possibleFillHeight);
+                            possibleFillWidth -|= el.layoutInfo.width;
+                            possibleFillHeight -|= el.layoutInfo.height;
                         }
                     }
 
-                    const fillWidthPerEl = if (fillWidthIndices.items.len > 0)
-                        possibleFillWidth / @as(u16, @intCast(fillWidthIndices.items.len))
-                    else
-                        0;
+                    var elWidths = try allocator.alloc(u16, fillWidthIndices.items.len);
+                    defer allocator.free(elWidths);
+
+                    var fillItemCount = fillWidthIndices.items.len;
+                    var remainingWidthBudget = possibleFillWidth;
+                    var i: usize = 0;
+                    while (fillItemCount > 0) : ({
+                        i += 1;
+                        fillItemCount -= 1;
+                    }) {
+                        const amount = remainingWidthBudget / @as(u16, @intCast(fillItemCount));
+                        elWidths[i] = amount;
+                        remainingWidthBudget -= amount;
+                    }
+
+                    elWidths[0] += 1;
 
                     var widthAcc: u16 = 0;
+                    i = 0;
                     for (layoutInfo.elements, 0..) |el, index| {
+                        defer i += 1;
                         el.layoutInfo.x = elInfo.x + preAdjust.width + widthAcc;
                         el.layoutInfo.y = elInfo.y + preAdjust.height;
 
@@ -317,15 +335,12 @@ pub fn setElementDimensions(
 
                             if (cons.width == .Fill) {
                                 el.layoutInfo.width = @max(
-                                    fillWidthPerEl,
+                                    elWidths[i],
                                     elPreAdjust.width + elPostAdjust.width,
                                 );
                                 trimTextElContentToWidth(
                                     el,
-                                    if (fillWidthPerEl < elPreAdjust.width + elPostAdjust.width)
-                                        0
-                                    else
-                                        fillWidthPerEl - elPreAdjust.width - elPostAdjust.width,
+                                    elWidths[i] -| (elPreAdjust.width + elPostAdjust.width),
                                 );
                             }
                         }
@@ -348,6 +363,7 @@ pub fn setElementDimensions(
                         };
                         try setElementDimensions(
                             allocator,
+                            context,
                             el,
                             sizeConstraint,
                             constraint,

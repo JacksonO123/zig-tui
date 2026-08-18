@@ -43,9 +43,12 @@ pub fn render(
     try context.backBuffer.reset(allocator, context.terminalInfo.size);
     {
         var termSizeCopy = context.terminalInfo.size;
-        termSizeCopy.width -= 1;
+        const rightPadding = utils.calculateRightPadding(context.config);
+        termSizeCopy.width -= rightPadding;
+
         try ui.setElementDimensions(
             context.terminalInfo.renderArena.allocator(),
+            context,
             el,
             termSizeCopy,
             .{},
@@ -77,9 +80,10 @@ fn writeDiff(
     var atCol: usize = 0;
     const frontBufferLines = context.frontBuffer.buffer.items[0..context.frontBuffer.lineLimit];
     const backBufferLines = context.backBuffer.buffer.items[0..context.backBuffer.lineLimit];
+    const rightPadding = utils.calculateRightPadding(context.config);
     for (frontBufferLines, backBufferLines) |*frontLine, *backLine| {
         for (frontLine.items, backLine.items, 0..) |frontCell, backCell, cellIndex| {
-            if (cellIndex >= size.width - 1) break;
+            if (cellIndex >= size.width - rightPadding) break;
 
             if (context.state.forceFullRender or !frontCell.compareTo(backCell)) {
                 if (atCol < cellIndex) {

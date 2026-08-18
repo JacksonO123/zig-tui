@@ -36,6 +36,9 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     var block = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
     _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
 
+    var block2 = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
+    _ = block2.styles.padding(1).bold().bg(.Blue).border(.Square);
+
     const fmtString = try std.fmt.allocPrint(
         terminal.renderAlloc,
         "plain text, no styles: {d}",
@@ -45,10 +48,15 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
 
     const layout = try ui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{ block, plain },
-        &.{.{
-            .width = .{ .Fill = {} },
-        }},
+        &.{ block, block2, plain },
+        &.{
+            .{
+                .width = .{ .Fill = {} },
+            },
+            .{
+                .width = .{ .Fill = {} },
+            },
+        },
         .Horizontal,
     );
     _ = layout.styles.gap(2);

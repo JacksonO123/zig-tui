@@ -5,4 +5,5 @@ pub const ScreenType = enum {
 
 pub const Config = struct {
     screenType: ScreenType = .Main,
+    rightPadding: ?u16 = null,
 };
