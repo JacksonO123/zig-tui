@@ -47,8 +47,34 @@ pub const Logger = struct {
         return try std.Io.Dir.cwd().createFile(io, LOG_FILE_NAME, .{ .truncate = false });
     }
 
+    pub fn logBufPrint(
+        self: *Self,
+        bufSize: comptime_int,
+        comptime fmtString: []const u8,
+        args: anytype,
+    ) !void {
+        try self.logLevelBufPrint(.Log, bufSize, fmtString, args);
+    }
+
     pub fn log(self: *Self, msg: []const u8) !void {
         try self.logLevel(.Log, msg);
+    }
+
+    pub fn logLevelBufPrint(
+        self: *Self,
+        level: LogLevels,
+        bufSize: comptime_int,
+        comptime fmtString: []const u8,
+        args: anytype,
+    ) !void {
+        const argsType = @typeInfo(@TypeOf(args));
+        if (argsType != .@"struct" or !argsType.@"struct".is_tuple) {
+            @compileError("Expected tuple for args");
+        }
+
+        var buf: [bufSize]u8 = undefined;
+        const str = try std.fmt.bufPrint(&buf, fmtString, args);
+        try self.logLevel(level, str);
     }
 
     pub fn logLevel(self: *Self, level: LogLevels, msg: []const u8) !void {

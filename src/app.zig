@@ -8,7 +8,9 @@ const terminalMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
-pub const config: configMod.Config = .{ .screenType = .Alternate };
+pub const config: configMod.Config = .{
+    // .screenType = .Alternate,
+};
 
 pub const Model = struct {
     const Self = @This();

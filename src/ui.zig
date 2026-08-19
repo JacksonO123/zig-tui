@@ -156,6 +156,8 @@ pub const Layout = union(LayoutTypes) {
     }
 };
 
+var logged = false;
+
 pub fn setElementDimensions(
     allocator: Allocator,
     context: *RenderContext,
@@ -226,16 +228,26 @@ pub fn setElementDimensions(
 
             element.variant.Text.renderedData = lines.items;
 
-            const maxWithConstraint = switch (constraint.width) {
+            const maxWidthWithConstraintValue = switch (constraint.width) {
                 .Value, .Percent, .Ratio => true,
                 .Max, .Min, .None, .Fill => false,
             };
+            const maxHeightWithConstraintValue = switch (constraint.width) {
+                .Value, .Percent, .Ratio => true,
+                .Max, .Min, .None, .Fill => false,
+            };
+
             const finalElWidth = elInfo.width + preAdjust.width + postAdjust.width;
-            elInfo.width = if (maxWithConstraint)
+            elInfo.width = if (maxWidthWithConstraintValue)
                 @max(finalElWidth, sizeConstraint.width)
             else
                 finalElWidth;
-            elInfo.height += preAdjust.height + postAdjust.height;
+
+            const finalElHeight = elInfo.height + preAdjust.height + postAdjust.height;
+            elInfo.height = if (maxHeightWithConstraintValue)
+                @max(finalElHeight, sizeConstraint.height)
+            else
+                finalElHeight;
         },
         .Layout => |layout| {
             elInfo.width += preAdjust.width + postAdjust.width;
@@ -322,7 +334,6 @@ pub fn setElementDimensions(
                     var widthAcc: u16 = 0;
                     i = 0;
                     for (layoutInfo.elements, 0..) |el, index| {
-                        defer i += 1;
                         el.layoutInfo.x = elInfo.x + preAdjust.width + widthAcc;
                         el.layoutInfo.y = elInfo.y + preAdjust.height;
 
@@ -339,6 +350,16 @@ pub fn setElementDimensions(
                                 trimTextElContentToWidth(
                                     el,
                                     elWidths[i] -| (elPreAdjust.width + elPostAdjust.width),
+                                );
+
+                                i += 1;
+                            }
+
+                            if (cons.height == .Fill) {
+                                el.layoutInfo.height = @max(
+                                    el.layoutInfo.height,
+                                    elPreAdjust.width + elPostAdjust.width,
+                                    sizeConstraint.height,
                                 );
                             }
                         }

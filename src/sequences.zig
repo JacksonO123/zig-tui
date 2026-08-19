@@ -60,11 +60,13 @@ pub const codes: Codes = .{
 };
 
 pub fn setCursorPos(context: *RenderContext, row: u16, col: u16, writer: *Writer) !void {
-    const rowDiff = row - context.state.rowOffset;
-    if (rowDiff < 0) {
-        try writer.print(codes.moveCursorUp, .{rowDiff * -1});
-    } else if (rowDiff != 0) {
-        try writer.print(codes.moveCursorDown, .{rowDiff});
+    if (row < context.state.rowOffset) {
+        try writer.print(
+            codes.moveCursorUp,
+            .{@as(i32, @intCast(context.state.rowOffset - row))},
+        );
+    } else if (row != context.state.rowOffset) {
+        try writer.print(codes.moveCursorDown, .{row - context.state.rowOffset});
     }
     try writer.print(codes.setCursorColAbsolute, .{col});
 

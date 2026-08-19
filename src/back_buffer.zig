@@ -282,14 +282,14 @@ pub const BackBuffer = struct {
 
     fn ensureLineExists(self: *Self, allocator: Allocator, lineIndex: usize, width: usize) !void {
         if (lineIndex < self.buffer.items.len) {
-            self.lineLimit = @max(self.lineLimit, lineIndex + 1);
+            self.lineLimit = @max(self.lineLimit, lineIndex);
             return;
         }
 
-        while (self.buffer.items.len < lineIndex + 1) {
+        while (self.buffer.items.len < lineIndex) {
             const line = try bufferUtil.createLine(allocator, width);
             try self.buffer.append(allocator, line);
         }
-        self.lineLimit = lineIndex + 1;
+        self.lineLimit = lineIndex;
     }
 };

@@ -61,9 +61,14 @@ pub fn render(
     try sequences.resetStyles(writer);
     context.backBuffer.rendering = .{};
     context.frontBuffer.rendering = .{};
-    try sequences.eraseDisplayAfterCursor(writer);
 
-    context.state.rowOffset = @intCast(context.backBuffer.lineLimit + 1);
+    const lastBackBufferLine = context.backBuffer.buffer.items[context.backBuffer.lineLimit - 1].items;
+    if (lastBackBufferLine.len < context.terminalInfo.size.width) {
+        try sequences.setCursorCol(@intCast(lastBackBufferLine.len), writer);
+        try sequences.eraseDisplayAfterCursor(writer);
+    }
+
+    context.state.rowOffset = @intCast(context.backBuffer.lineLimit);
     context.state.forceFullRender = false;
 
     try writer.flush();
@@ -81,7 +86,7 @@ fn writeDiff(
     const frontBufferLines = context.frontBuffer.buffer.items[0..context.frontBuffer.lineLimit];
     const backBufferLines = context.backBuffer.buffer.items[0..context.backBuffer.lineLimit];
     const rightPadding = utils.calculateRightPadding(context.config);
-    for (frontBufferLines, backBufferLines) |*frontLine, *backLine| {
+    for (frontBufferLines, backBufferLines, 0..) |*frontLine, *backLine, rowIndex| {
         for (frontLine.items, backLine.items, 0..) |frontCell, backCell, cellIndex| {
             if (cellIndex >= size.width - rightPadding) break;
 
@@ -102,7 +107,9 @@ fn writeDiff(
         try sequences.setBgFromColor(.None, writer);
         context.frontBuffer.rendering.bg = .None;
 
-        try sequences.simulateNewline(context, writer);
+        if (rowIndex + 1 < frontBufferLines.len) {
+            try sequences.simulateNewline(context, writer);
+        }
 
         atCol = 0;
     }
