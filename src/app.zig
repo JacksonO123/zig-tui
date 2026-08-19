@@ -9,7 +9,7 @@ const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
 pub const config: configMod.Config = .{
-    // .screenType = .Alternate,
+    .screenType = .Alternate,
 };
 
 pub const Model = struct {
@@ -39,7 +39,10 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     _ = block.styles.padding(1).bold().bg(.Blue).border(.Square);
 
     var block2 = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
-    _ = block2.styles.padding(1).bold().bg(.Blue).border(.Square);
+    _ = block2.styles.padding(1).bold().bg(.Red).border(.Square);
+
+    var block3 = try ui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
+    _ = block3.styles.padding(1).bold().bg(.Green).border(.Square);
 
     const fmtString = try std.fmt.allocPrint(
         terminal.renderAlloc,
@@ -51,18 +54,26 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
     const layout = try ui.Layout.fromElementsAndConstraints(
         allocator,
         &.{ block, block2, plain },
-        &.{
-            .{
-                .width = .{ .Fill = {} },
-                .height = .{ .Fill = {} },
-            },
-            .{
-                .width = .{ .Fill = {} },
-            },
-        },
+        &.{.{
+            .width = .{ .Fill = {} },
+        }},
         .Horizontal,
     );
     _ = layout.styles.gap(2);
 
-    return layout;
+    const layout2 = try ui.Layout.fromElementsAndConstraints(
+        allocator,
+        &.{ layout, block3 },
+        &.{
+            .{},
+            .{
+                .height = .{ .Fill = {} },
+                .width = .{ .Fill = {} },
+            },
+        },
+        .Vertical,
+    );
+    _ = layout2.styles.gap(1);
+
+    return layout2;
 }
