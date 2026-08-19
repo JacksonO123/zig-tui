@@ -319,8 +319,6 @@ pub fn setElementDimensions(
                         remainingWidthBudget -= amount;
                     }
 
-                    elWidths[0] += 1;
-
                     var widthAcc: u16 = 0;
                     i = 0;
                     for (layoutInfo.elements, 0..) |el, index| {

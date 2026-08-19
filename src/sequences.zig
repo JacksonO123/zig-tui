@@ -59,7 +59,7 @@ pub const codes: Codes = .{
     .disableAlternateScreen = "\x1b[?1049l",
 };
 
-pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writer) !void {
+pub fn setCursorPos(context: *RenderContext, row: u16, col: u16, writer: *Writer) !void {
     const rowDiff = row - context.state.rowOffset;
     if (rowDiff < 0) {
         try writer.print(codes.moveCursorUp, .{rowDiff * -1});
@@ -71,7 +71,7 @@ pub fn setCursorPos(context: *RenderContext, row: i32, col: usize, writer: *Writ
     context.state.rowOffset = row;
 }
 
-pub fn setCursorCol(col: usize, writer: *Writer) !void {
+pub fn setCursorCol(col: u16, writer: *Writer) !void {
     try writer.print(codes.setCursorColAbsolute, .{col});
 }
 
@@ -95,8 +95,9 @@ pub fn resetStyles(writer: *Writer) !void {
     try writer.writeAll(codes.resetStyles);
 }
 
-pub fn setCursorPosAbsolute(row: usize, col: usize, writer: *Writer) !void {
+pub fn setCursorPosAbsolute(context: *RenderContext, row: u16, col: u16, writer: *Writer) !void {
     try writer.print(codes.setCursorPosAbsolute, .{ row, col });
+    context.state.rowOffset = row;
 }
 
 pub fn boldText(writer: *Writer) !void {
@@ -123,12 +124,19 @@ pub fn disableItalicText(writer: *Writer) !void {
     try writer.writeAll(codes.disableItalicText);
 }
 
-pub fn moveCursorUp(amount: usize, writer: *Writer) !void {
-    try writer.print(codes.moveCursorUp, .{amount});
+pub fn moveCursorUp(context: *RenderContext, amount: u16, writer: *Writer) !void {
+    const moveAmount = if (context.state.rowOffset -| amount == 0)
+        amount - context.state.rowOffset
+    else
+        amount;
+
+    try writer.print(codes.moveCursorUp, .{moveAmount});
+    context.state.rowOffset -= moveAmount;
 }
 
-pub fn moveCursorDown(amount: usize, writer: *Writer) !void {
+pub fn moveCursorDown(context: *RenderContext, amount: u16, writer: *Writer) !void {
     try writer.print(codes.moveCursorDown, .{amount});
+    context.state.rowOffset += amount;
 }
 
 pub fn setFgFromColor(color: stylesMod.Color, writer: *Writer) !void {
@@ -175,4 +183,14 @@ pub fn enableAlternateScreen(writer: *Writer) !void {
 
 pub fn disableAlternateScreen(writer: *Writer) !void {
     try writer.writeAll(codes.disableAlternateScreen);
+}
+
+pub fn simulateNewline(context: *RenderContext, writer: *Writer) !void {
+    switch (context.config.screenType) {
+        .Main => {
+            try writer.writeAll("\r\n");
+            context.state.rowOffset += 1;
+        },
+        .Alternate => try setCursorPosAbsolute(context, context.state.rowOffset + 1, 1, writer),
+    }
 }

@@ -31,7 +31,7 @@ pub fn render(
     writer: *Writer,
 ) !void {
     if (context.config.screenType == .Alternate) {
-        try sequences.setCursorPosAbsolute(1, 1, writer);
+        try sequences.setCursorPosAbsolute(context, 1, 1, writer);
     } else {
         try sequences.setCursorPos(context, 1, 1, writer);
     }
@@ -63,7 +63,7 @@ pub fn render(
     context.frontBuffer.rendering = .{};
     try sequences.eraseDisplayAfterCursor(writer);
 
-    context.state.rowOffset = @as(i32, @intCast(context.backBuffer.lineLimit)) + 1;
+    context.state.rowOffset = @intCast(context.backBuffer.lineLimit + 1);
     context.state.forceFullRender = false;
 
     try writer.flush();
@@ -87,7 +87,7 @@ fn writeDiff(
 
             if (context.state.forceFullRender or !frontCell.compareTo(backCell)) {
                 if (atCol < cellIndex) {
-                    try sequences.setCursorCol(cellIndex + 1, writer);
+                    try sequences.setCursorCol(@intCast(cellIndex + 1), writer);
                 }
 
                 try matchRenderStyle(&context.frontBuffer.rendering, backCell.style, writer);
@@ -101,7 +101,9 @@ fn writeDiff(
 
         try sequences.setBgFromColor(.None, writer);
         context.frontBuffer.rendering.bg = .None;
-        try writer.writeAll("\r\n");
+
+        try sequences.simulateNewline(context, writer);
+
         atCol = 0;
     }
 }

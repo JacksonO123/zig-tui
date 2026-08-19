@@ -155,11 +155,17 @@ pub const TerminalInfo = struct {
 
         try utils.enableRawMode();
         try sequences.hideCursor(writer);
-        try sequences.disableAutoWrap(writer);
+
+        if (config.screenType == .Main) {
+            try sequences.disableAutoWrap(writer);
+        }
     }
 
     fn deinitTermBehavior(config: configMod.Config, writer: *Writer) !void {
-        try sequences.enableAutoWrap(writer);
+        if (config.screenType == .Main) {
+            try sequences.enableAutoWrap(writer);
+        }
+
         try sequences.showCursor(writer);
         utils.disableRawMode();
 

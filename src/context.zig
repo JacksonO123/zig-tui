@@ -21,7 +21,7 @@ pub const GlobalState = struct {
 pub var globalState: GlobalState = .{ .writeFds = undefined };
 
 pub const RenderState = struct {
-    rowOffset: i32 = 1,
+    rowOffset: u16 = 1,
     forceFullRender: bool = false,
 };
 

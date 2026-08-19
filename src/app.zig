@@ -41,7 +41,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
 
     const fmtString = try std.fmt.allocPrint(
         terminal.renderAlloc,
-        "plain text, no styles: {d}",
+        "plain text, no styles: {d}.",
         .{terminal.model.toRender},
     );
     const plain = try ui.Text.fromConstText(allocator, fmtString);
