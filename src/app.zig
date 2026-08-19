@@ -52,6 +52,7 @@ pub fn renderUI(terminal: *terminalMod.Terminal) !*ui.UIElement {
         &.{
             .{
                 .width = .{ .Fill = {} },
+                .height = .{ .Fill = {} },
             },
             .{
                 .width = .{ .Fill = {} },

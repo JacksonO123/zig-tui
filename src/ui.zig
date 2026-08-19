@@ -294,7 +294,7 @@ pub fn setElementDimensions(
                             }
 
                             if (cons.height == .Fill) {
-                                try fillWidthIndices.append(allocator, index);
+                                try fillHeightIndices.append(allocator, index);
                             } else {
                                 possibleFillHeight -= el.layoutInfo.height;
                             }
