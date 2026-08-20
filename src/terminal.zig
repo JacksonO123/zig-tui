@@ -2,7 +2,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
-const app = @import("app.zig");
 const configMod = @import("config.zig");
 const sequences = @import("sequences.zig");
 const ui = @import("ui.zig");
@@ -69,26 +68,32 @@ pub const WriteFds = struct {
     stateChange: std.posix.fd_t,
 };
 
-pub const Terminal = struct {
-    const Self = @This();
+pub fn Terminal(comptime ModelType: type) type {
+    return struct {
+        const Self = @This();
 
-    renderAlloc: Allocator,
-    gpa: Allocator,
-    model: *app.Model,
+        renderAlloc: Allocator,
+        gpa: Allocator,
+        model: *ModelType,
 
-    pub fn init(allocator: Allocator, model: *app.Model, gpa: Allocator) Self {
-        return .{ .renderAlloc = allocator, .gpa = gpa, .model = model };
-    }
-
-    pub fn stateChanged() void {
-        if (context.globalState.rendering) {
-            context.globalState.needsRerender = true;
-        } else {
-            const byte: u8 = 1;
-            _ = std.c.write(context.globalState.writeFds.stateChange, @ptrCast(&byte), 1);
+        pub fn init(
+            allocator: Allocator,
+            model: *ModelType,
+            gpa: Allocator,
+        ) Self {
+            return .{ .renderAlloc = allocator, .gpa = gpa, .model = model };
         }
-    }
-};
+
+        pub fn stateChanged(_: *Self) void {
+            if (context.globalState.rendering) {
+                context.globalState.needsRerender = true;
+            } else {
+                const byte: u8 = 1;
+                _ = std.c.write(context.globalState.writeFds.stateChange, @ptrCast(&byte), 1);
+            }
+        }
+    };
+}
 
 fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
     _ = sig;
@@ -105,9 +110,9 @@ pub const TerminalInfo = struct {
     pollArena: std.heap.ArenaAllocator,
     renderArena: std.heap.ArenaAllocator,
 
-    pub fn init(allocator: Allocator, config: configMod.Config, writer: *Writer) !Self {
-        const pollArena = std.heap.ArenaAllocator.init(allocator);
-        const renderArena = std.heap.ArenaAllocator.init(allocator);
+    pub fn init(config: configMod.Config, writer: *Writer) !Self {
+        const pollArena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        const renderArena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 
         const size = try utils.getTermSize(config);
         try Self.setTermBehavior(config, writer);
@@ -145,6 +150,8 @@ pub const TerminalInfo = struct {
     }
 
     pub fn deinit(self: *Self, config: configMod.Config, writer: *Writer) void {
+        self.pollArena.deinit();
+        self.renderArena.deinit();
         self.deinitPollEvents();
         Self.deinitTermBehavior(config, writer) catch {};
     }

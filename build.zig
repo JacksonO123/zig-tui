@@ -10,17 +10,36 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    const exe = b.addExecutable(.{
-        .use_llvm = true,
+    const tui_lib = b.addLibrary(.{
         .name = "zig_tui",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/app.zig"),
+            .root_source_file = b.path("src/root.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{
                 .{
                     .name = "c",
                     .module = translate_c.createModule(),
+                },
+            },
+        }),
+    });
+
+    const exe = b.addExecutable(.{
+        .use_llvm = true,
+        .name = "zig_tui_test",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{
+                    .name = "c",
+                    .module = translate_c.createModule(),
+                },
+                .{
+                    .name = "zig_tui",
+                    .module = tui_lib.root_module,
                 },
             },
         }),

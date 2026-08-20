@@ -4,71 +4,61 @@ const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 
 const c = @import("c");
-const zig_tui = @import("zig_tui");
 
-const app = @import("app.zig");
 const configMod = @import("config.zig");
-const context = @import("context.zig");
+const contextMod = @import("context.zig");
 const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
 const termMod = @import("terminal.zig");
 const utils = @import("utils.zig");
+const ui = @import("ui.zig");
 
-var resizePipeWriteFd: std.posix.fd_t = -1;
+pub const Config = configMod.Config;
+pub const Terminal = termMod.Terminal;
+pub const UIElement = ui.UIElement;
+pub const Text = ui.Text;
+pub const Layout = ui.Layout;
 
-pub fn compatibleInitTuiLib(compatibleConfig: configMod.CompatibleConfig) !context.RenderContext {
-    const config = configMod.Config{
-        .rightPadding = compatibleConfig.rightPadding,
-        .screenType = compatibleConfig.screenType,
-    };
-    const arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const gpa: std.heap.DebugAllocator(.{}) = .init;
-    const threaded: std.Io.Threaded = .init(gpa, .{});
-    const io = threaded.io();
-    return initTuiLib(gpa, arena.allocator(), io, config);
-}
-
-pub fn initTuiLib(
+pub inline fn initTuiLib(
+    comptime ModelType: type,
     gpa: Allocator,
-    arenaAlloc: Allocator,
     io: std.Io,
     config: configMod.Config,
-) !context.RenderContext {
-    var globalArena = std.heap.ArenaAllocator.init(arenaAlloc);
-    defer globalArena.deinit();
-    const globalArenaAllocator = globalArena.allocator();
-
-    var stdoutBuf: [1024]u8 = undefined;
-    var stdout = std.Io.File.stdout().writer(io, &stdoutBuf);
-    const writer = &stdout.interface;
-
-    var model = app.Model.init();
-    var renderContext = try context.RenderContext.init(
+    model: *ModelType,
+    writer: *Writer,
+) !*contextMod.RenderContext(ModelType) {
+    const ptr = try gpa.create(contextMod.RenderContext(ModelType));
+    ptr.* = try contextMod.RenderContext(ModelType).init(
         gpa,
-        globalArenaAllocator,
         io,
         config,
-        &model,
+        model,
         writer,
     );
-    defer renderContext.deinit(gpa, config, writer);
-    errdefer renderContext.deinit(gpa, config, writer);
+    return ptr;
+}
 
+pub fn render(
+    comptime ModelType: type,
+    context: *contextMod.RenderContext(ModelType),
+    renderUI: renderer.RenderUIFn(ModelType),
+    writer: *Writer,
+) !void {
     while (true) {
-        const timeoutMs: i32 = if (context.globalState.needsRerender) 1 else -1;
-        const pollData, const readData = try renderContext.terminalInfo.pollEvents(timeoutMs);
+        const timeoutMs: i32 = if (contextMod.globalState.needsRerender) 1 else -1;
+        const pollData, const readData = try context.terminalInfo.pollEvents(timeoutMs);
 
-        const neededRerender = context.globalState.needsRerender;
-        context.globalState.needsRerender = false;
+        const neededRerender = contextMod.globalState.needsRerender;
+        contextMod.globalState.needsRerender = false;
 
         if (pollData.includes(.Resize)) {
-            const size = try utils.getTermSize(config);
-            renderContext.onTerminalResize(size);
-            try renderer.handleRender(gpa, &renderContext, writer);
+            const size = try utils.getTermSize(context.config);
+            context.onTerminalResize(size);
+            try renderer.handleRender(ModelType, context.gpa, context, renderUI, writer);
         }
 
         if (pollData.includes(.StateChange) or neededRerender) {
-            try renderer.handleRender(gpa, &renderContext, writer);
+            try renderer.handleRender(ModelType, context.gpa, context, renderUI, writer);
         }
 
         if (pollData.includes(.Stdin)) {

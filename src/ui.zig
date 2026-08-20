@@ -159,8 +159,9 @@ pub const Layout = union(LayoutTypes) {
 var logged = false;
 
 pub fn setElementDimensions(
+    comptime ModelType: type,
     allocator: Allocator,
-    context: *RenderContext,
+    context: *RenderContext(ModelType),
     element: *UIElement,
     sizeConstraint: utils.Size,
     constraint: Constraint,
@@ -280,6 +281,7 @@ pub fn setElementDimensions(
                             .y = elInfo.y + preAdjust.height,
                         };
                         try setElementDimensions(
+                            ModelType,
                             allocator,
                             context,
                             el,
@@ -387,6 +389,7 @@ pub fn setElementDimensions(
                             .y = elInfo.y + preAdjust.height + elInfo.height,
                         };
                         try setElementDimensions(
+                            ModelType,
                             allocator,
                             context,
                             el,
