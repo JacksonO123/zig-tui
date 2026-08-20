@@ -47,12 +47,6 @@ pub fn main(init: std.process.Init) !void {
         if (pollData.includes(.Resize)) {
             const size = try utils.getTermSize(app.config);
             renderContext.onTerminalResize(size);
-
-            try sequences.requestCursorPosition(writer);
-            try writer.flush();
-            const row = try utils.readCursorPositionReport();
-            renderContext.state.rowOffset = row;
-
             try renderer.handleRender(gpa, &renderContext, writer);
         }
 

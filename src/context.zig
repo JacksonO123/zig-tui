@@ -79,7 +79,7 @@ pub const RenderContext = struct {
     pub fn onTerminalResize(self: *Self, size: utils.Size) void {
         self.terminalInfo.size = size;
         if (self.config.screenType == .Main and size.height < self.state.rowOffset) {
-            self.state.rowOffset = size.height;
+            self.state.rowOffset = 1;
         }
         self.state.forceFullRender = true;
     }
