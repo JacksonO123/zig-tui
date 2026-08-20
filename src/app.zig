@@ -9,7 +9,7 @@ const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
 pub const config: configMod.Config = .{
-    .screenType = .Alternate,
+    // .screenType = .Alternate,
 };
 
 pub const Model = struct {

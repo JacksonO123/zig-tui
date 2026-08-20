@@ -4,6 +4,7 @@ const Writer = std.Io.Writer;
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
+const utils = @import("utils.zig");
 
 const Codes = struct {
     const Str = []const u8;
@@ -19,6 +20,7 @@ const Codes = struct {
     resetStyles: Str,
     hideCursor: Str,
     showCursor: Str,
+    requestCursorPosition: Str,
 
     boldText: Str,
     disableBoldText: Str,
@@ -45,6 +47,7 @@ pub const codes: Codes = .{
     .resetStyles = "\x1b[0m",
     .hideCursor = "\x1b[?25l",
     .showCursor = "\x1b[?25h",
+    .requestCursorPosition = "\x1b[6n",
 
     .boldText = "\x1b[1m",
     .disableBoldText = "\x1b[22m",
@@ -195,4 +198,8 @@ pub fn simulateNewline(context: *RenderContext, writer: *Writer) !void {
         },
         .Alternate => try setCursorPosAbsolute(context, context.state.rowOffset + 1, 1, writer),
     }
+}
+
+pub fn requestCursorPosition(writer: *Writer) !void {
+    try writer.writeAll(codes.requestCursorPosition);
 }

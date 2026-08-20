@@ -108,7 +108,7 @@ pub const TerminalInfo = struct {
         const pollArena = std.heap.ArenaAllocator.init(allocator);
         const renderArena = std.heap.ArenaAllocator.init(allocator);
 
-        const size = try utils.getTermSize();
+        const size = try utils.getTermSize(config);
         try Self.setTermBehavior(config, writer);
 
         const resizeFds = try Self.initPipeFds();

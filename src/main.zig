@@ -45,14 +45,18 @@ pub fn main(init: std.process.Init) !void {
         context.globalState.needsRerender = false;
 
         if (pollData.includes(.Resize)) {
-            const size = try utils.getTermSize();
+            const size = try utils.getTermSize(app.config);
             renderContext.onTerminalResize(size);
+
+            try sequences.requestCursorPosition(writer);
+            try writer.flush();
+            const row = try utils.readCursorPositionReport();
+            renderContext.state.rowOffset = row;
+
             try renderer.handleRender(gpa, &renderContext, writer);
         }
 
         if (pollData.includes(.StateChange) or neededRerender) {
-            const size = try utils.getTermSize();
-            renderContext.updateTerminalSize(size);
             try renderer.handleRender(gpa, &renderContext, writer);
         }
 
