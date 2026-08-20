@@ -1,10 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const backBufferMod = @import("back_buffer.zig");
 const configMod = @import("config.zig");
-const contextMod = @import("context.zig");
-const RenderContext = contextMod.RenderContext;
 
 pub const Size = struct {
     height: u16 = 0,
@@ -59,73 +56,6 @@ pub fn setNonblocking(fd: std.posix.fd_t) !void {
     if (std.c.fcntl(fd, std.c.F.SETFL, newFlags) < 0) return error.FcntlFailed;
 }
 
-pub fn structFieldsToType(comptime Struct: type, comptime ToType: type) type {
-    const structTypeBefore = @typeInfo(Struct);
-    if (structTypeBefore != .@"struct") @compileError("Expected struct for index transform");
-    const structType = structTypeBefore.@"struct";
-
-    var fieldNames: [structType.fields.len][]const u8 = undefined;
-    var fieldTypes: [structType.fields.len]type = undefined;
-    var fieldAttributes: [structType.fields.len]std.builtin.Type.StructField.Attributes = undefined;
-
-    inline for (structType.fields, 0..) |field, index| {
-        fieldNames[index] = field.name;
-        fieldTypes[index] = ToType;
-        fieldAttributes[index] = .{
-            .@"comptime" = field.is_comptime,
-            .@"align" = field.alignment,
-            .default_value_ptr = field.default_value_ptr,
-        };
-    }
-
-    return @Struct(
-        structType.layout,
-        structType.backing_integer,
-        &fieldNames,
-        &fieldTypes,
-        &fieldAttributes,
-    );
-}
-
-pub fn appendFieldToStruct(
-    comptime Struct: type,
-    comptime newField: struct {
-        name: []const u8,
-        type: type,
-        attributes: std.builtin.Type.StructField.Attributes,
-    },
-) type {
-    const structTypeBefore = @typeInfo(Struct);
-    if (structTypeBefore != .@"struct") @compileError("Expected struct for index transform");
-    const structType = structTypeBefore.@"struct";
-
-    var fieldNames: [structType.fields.len + 1][]const u8 = undefined;
-    var fieldTypes: [structType.fields.len + 1]type = undefined;
-    var fieldAttributes: [structType.fields.len + 1]std.builtin.Type.StructField.Attributes = undefined;
-
-    inline for (structType.fields, 0..) |field, index| {
-        fieldNames[index] = field.name;
-        fieldTypes[index] = field.type;
-        fieldAttributes[index] = .{
-            .@"comptime" = field.is_comptime,
-            .@"align" = field.alignment,
-            .default_value_ptr = field.default_value_ptr,
-        };
-    }
-
-    fieldNames[fieldNames.len - 1] = newField.name;
-    fieldTypes[fieldTypes.len - 1] = newField.type;
-    fieldAttributes[fieldAttributes.len - 1] = newField.attributes;
-
-    return @Struct(
-        structType.layout,
-        structType.backing_integer,
-        &fieldNames,
-        &fieldTypes,
-        &fieldAttributes,
-    );
-}
-
 pub fn getTermSize(config: configMod.Config) !Size {
     var winSize: std.posix.winsize = undefined;
     const fd = std.Io.File.stdout().handle;
@@ -145,50 +75,4 @@ pub fn pollFdHasInEvent(fd: std.posix.pollfd) bool {
 
 pub fn calculateRightPadding(config: configMod.Config) u16 {
     return config.rightPadding orelse @as(u16, if (config.screenType == .Main) 1 else 0);
-}
-
-pub fn readCursorPositionReport() !u16 {
-    var state: enum { esc, bracket, row, col } = .esc;
-    var rowVal: u16 = 0;
-    var colVal: u16 = 0;
-
-    var fds = [_]std.posix.pollfd{.{
-        .fd = std.posix.STDIN_FILENO,
-        .events = std.posix.POLL.IN,
-        .revents = 0,
-    }};
-
-    const timeoutMs: i32 = 200; // terminals reply near-instantly; bail rather than hang forever
-
-    while (true) {
-        const ready = try std.posix.poll(&fds, timeoutMs);
-        if (ready == 0) return error.UnexpectedEof; // no reply in time
-
-        var byte: [1]u8 = undefined;
-        const n = std.posix.read(std.posix.STDIN_FILENO, &byte) catch |err| switch (err) {
-            error.WouldBlock => continue, // not actually ready yet, poll again
-            else => return err,
-        };
-        if (n == 0) return error.UnexpectedEof;
-        const c = byte[0];
-
-        switch (state) {
-            .esc => if (c == 0x1b) {
-                state = .bracket;
-            },
-            .bracket => state = if (c == '[') .row else .esc,
-            .row => switch (c) {
-                '0'...'9' => rowVal = rowVal *% 10 +% (c - '0'),
-                ';' => state = .col,
-                else => return error.MalformedResponse,
-            },
-            .col => switch (c) {
-                '0'...'9' => colVal = colVal *% 10 +% (c - '0'),
-                'R' => {
-                    return rowVal;
-                },
-                else => return error.MalformedResponse,
-            },
-        }
-    }
 }

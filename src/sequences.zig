@@ -4,7 +4,6 @@ const Writer = std.Io.Writer;
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
-const utils = @import("utils.zig");
 
 const Codes = struct {
     const Str = []const u8;
@@ -62,7 +61,13 @@ pub const codes: Codes = .{
     .disableAlternateScreen = "\x1b[?1049l",
 };
 
-pub fn setCursorPos(context: *RenderContext, row: u16, col: u16, writer: *Writer) !void {
+pub fn setCursorPos(
+    comptime ModelType: type,
+    context: *RenderContext(ModelType),
+    row: u16,
+    col: u16,
+    writer: *Writer,
+) !void {
     if (row < context.state.rowOffset) {
         try writer.print(
             codes.moveCursorUp,
@@ -100,7 +105,13 @@ pub fn resetStyles(writer: *Writer) !void {
     try writer.writeAll(codes.resetStyles);
 }
 
-pub fn setCursorPosAbsolute(context: *RenderContext, row: u16, col: u16, writer: *Writer) !void {
+pub fn setCursorPosAbsolute(
+    comptime ModelType: type,
+    context: *RenderContext(ModelType),
+    row: u16,
+    col: u16,
+    writer: *Writer,
+) !void {
     try writer.print(codes.setCursorPosAbsolute, .{ row, col });
     context.state.rowOffset = row;
 }
@@ -129,7 +140,12 @@ pub fn disableItalicText(writer: *Writer) !void {
     try writer.writeAll(codes.disableItalicText);
 }
 
-pub fn moveCursorUp(context: *RenderContext, amount: u16, writer: *Writer) !void {
+pub fn moveCursorUp(
+    comptime ModelType: type,
+    context: *RenderContext(ModelType),
+    amount: u16,
+    writer: *Writer,
+) !void {
     const moveAmount = if (context.state.rowOffset -| amount == 0)
         amount - context.state.rowOffset
     else
@@ -139,7 +155,12 @@ pub fn moveCursorUp(context: *RenderContext, amount: u16, writer: *Writer) !void
     context.state.rowOffset -= moveAmount;
 }
 
-pub fn moveCursorDown(context: *RenderContext, amount: u16, writer: *Writer) !void {
+pub fn moveCursorDown(
+    comptime ModelType: type,
+    context: *RenderContext(ModelType),
+    amount: u16,
+    writer: *Writer,
+) !void {
     try writer.print(codes.moveCursorDown, .{amount});
     context.state.rowOffset += amount;
 }
@@ -190,13 +211,23 @@ pub fn disableAlternateScreen(writer: *Writer) !void {
     try writer.writeAll(codes.disableAlternateScreen);
 }
 
-pub fn simulateNewline(context: *RenderContext, writer: *Writer) !void {
+pub fn simulateNewline(
+    comptime ModelType: type,
+    context: *RenderContext(ModelType),
+    writer: *Writer,
+) !void {
     switch (context.config.screenType) {
         .Main => {
             try writer.writeAll("\r\n");
             context.state.rowOffset += 1;
         },
-        .Alternate => try setCursorPosAbsolute(context, context.state.rowOffset + 1, 1, writer),
+        .Alternate => try setCursorPosAbsolute(
+            ModelType,
+            context,
+            context.state.rowOffset + 1,
+            1,
+            writer,
+        ),
     }
 }
 

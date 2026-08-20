@@ -23,13 +23,13 @@ pub const Logger = struct {
     fileWriter: std.Io.File.Writer,
     io: std.Io,
 
-    pub fn init(allocator: Allocator, io: std.Io) !Self {
+    pub fn init(io: std.Io) !Self {
         const logFile = try initLogFile(io);
         const len = try logFile.length(io);
         var writer = logFile.writer(io, &.{});
         try writer.seekTo(len);
 
-        const arena = std.heap.ArenaAllocator.init(allocator);
+        const arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 
         return .{
             .io = io,

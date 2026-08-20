@@ -2,38 +2,43 @@ const std = @import("std");
 const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
 
-const app = @import("app.zig");
-const bufferUtil = @import("buffer.zig");
-const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const sequences = @import("sequences.zig");
 const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
+const termMod = @import("terminal.zig");
+
+pub fn RenderUIFn(comptime ModelType: type) type {
+    return fn (*termMod.Terminal(ModelType)) anyerror!*ui.UIElement;
+}
 
 pub fn handleRender(
+    comptime ModelType: type,
     gpa: Allocator,
-    renderContext: *RenderContext,
+    renderContext: *RenderContext(ModelType),
+    renderUI: RenderUIFn(ModelType),
     writer: *Writer,
 ) !void {
     renderContext.prepareForReRender();
     contextMod.globalState.rendering = true;
-    const el = try app.renderUI(&renderContext.terminal);
-    try render(gpa, renderContext, el, writer);
+    const el = try renderUI(&renderContext.terminal);
+    try render(ModelType, gpa, renderContext, el, writer);
     contextMod.globalState.rendering = false;
 }
 
 pub fn render(
+    comptime ModelType: type,
     allocator: Allocator,
-    context: *RenderContext,
+    context: *RenderContext(ModelType),
     el: *ui.UIElement,
     writer: *Writer,
 ) !void {
     if (context.config.screenType == .Alternate) {
-        try sequences.setCursorPosAbsolute(context, 1, 1, writer);
+        try sequences.setCursorPosAbsolute(ModelType, context, 1, 1, writer);
     } else {
-        try sequences.setCursorPos(context, 1, 1, writer);
+        try sequences.setCursorPos(ModelType, context, 1, 1, writer);
     }
 
     if (context.state.forceFullRender) {
@@ -47,6 +52,7 @@ pub fn render(
         termSizeCopy.width -= rightPadding;
 
         try ui.setElementDimensions(
+            ModelType,
             context.terminalInfo.renderArena.allocator(),
             context,
             el,
@@ -56,7 +62,7 @@ pub fn render(
         );
     }
     try context.backBuffer.renderInBuffer(allocator, el, context.terminalInfo.size);
-    try writeDiff(allocator, context, context.terminalInfo.size, writer);
+    try writeDiff(ModelType, allocator, context, context.terminalInfo.size, writer);
 
     try sequences.resetStyles(writer);
     context.backBuffer.rendering = .{};
@@ -71,7 +77,7 @@ pub fn render(
     context.state.rowOffset = @intCast(context.backBuffer.lineLimit);
 
     if (context.config.screenType == .Main) {
-        try sequences.setCursorPos(context, 1, 1, writer);
+        try sequences.setCursorPos(ModelType, context, 1, 1, writer);
     }
 
     context.state.forceFullRender = false;
@@ -80,8 +86,9 @@ pub fn render(
 }
 
 fn writeDiff(
+    comptime ModelType: type,
     allocator: Allocator,
-    context: *contextMod.RenderContext,
+    context: *contextMod.RenderContext(ModelType),
     size: utils.Size,
     writer: *Writer,
 ) !void {
@@ -113,7 +120,7 @@ fn writeDiff(
         context.frontBuffer.rendering.bg = .None;
 
         if (rowIndex + 1 < frontBufferLines.len) {
-            try sequences.simulateNewline(context, writer);
+            try sequences.simulateNewline(ModelType, context, writer);
         }
 
         atCol = 0;

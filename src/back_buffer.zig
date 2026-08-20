@@ -3,10 +3,6 @@ const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
 const bufferUtil = @import("buffer.zig");
-const configMod = @import("config.zig");
-const frontBufferMod = @import("front_buffer.zig");
-const renderer = @import("renderer.zig");
-const sequences = @import("sequences.zig");
 const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");

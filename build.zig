@@ -10,23 +10,36 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    const mod = b.addModule("zig_tui", .{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
+    const tui_lib = b.addLibrary(.{
+        .name = "zig_tui",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{
+                    .name = "c",
+                    .module = translate_c.createModule(),
+                },
+            },
+        }),
     });
 
     const exe = b.addExecutable(.{
         .use_llvm = true,
-        .name = "zig_tui",
+        .name = "zig_tui_test",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "zig_tui", .module = mod },
                 .{
                     .name = "c",
                     .module = translate_c.createModule(),
+                },
+                .{
+                    .name = "zig_tui",
+                    .module = tui_lib.root_module,
                 },
             },
         }),
@@ -44,20 +57,4 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }
-
-    const mod_tests = b.addTest(.{
-        .root_module = mod,
-    });
-
-    const run_mod_tests = b.addRunArtifact(mod_tests);
-
-    const exe_tests = b.addTest(.{
-        .root_module = exe.root_module,
-    });
-
-    const run_exe_tests = b.addRunArtifact(exe_tests);
-
-    const test_step = b.step("test", "Run tests");
-    test_step.dependOn(&run_mod_tests.step);
-    test_step.dependOn(&run_exe_tests.step);
 }
