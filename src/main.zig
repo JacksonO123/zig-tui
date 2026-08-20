@@ -1,11 +1,5 @@
 const std = @import("std");
-
 const tui = @import("zig_tui");
-// const sequences = @import("sequences.zig");
-// const styles = @import("styles.zig");
-// const terminalMod = @import("terminal.zig");
-// const ui = @import("ui.zig");
-// const utils = @import("utils.zig");
 
 const config: tui.Config = .{
     .screenType = .Alternate,

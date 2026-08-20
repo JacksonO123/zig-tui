@@ -1,10 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const backBufferMod = @import("back_buffer.zig");
 const configMod = @import("config.zig");
-const contextMod = @import("context.zig");
-const RenderContext = contextMod.RenderContext;
 
 pub const Size = struct {
     height: u16 = 0,

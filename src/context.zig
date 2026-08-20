@@ -6,9 +6,7 @@ const backBufferMod = @import("back_buffer.zig");
 const configMod = @import("config.zig");
 const frontBufferMod = @import("front_buffer.zig");
 const logMod = @import("logger.zig");
-const sequences = @import("sequences.zig");
 const terminalMod = @import("terminal.zig");
-const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 
 pub const GlobalState = struct {

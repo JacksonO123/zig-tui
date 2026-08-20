@@ -4,7 +4,6 @@ const Writer = std.Io.Writer;
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
-const utils = @import("utils.zig");
 
 const Codes = struct {
     const Str = []const u8;

@@ -1,17 +1,15 @@
 const std = @import("std");
 const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
-const builtin = @import("builtin");
 
 const c = @import("c");
 
 const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
 const renderer = @import("renderer.zig");
-const sequences = @import("sequences.zig");
 const termMod = @import("terminal.zig");
-const utils = @import("utils.zig");
 const ui = @import("ui.zig");
+const utils = @import("utils.zig");
 
 pub const Config = configMod.Config;
 pub const Terminal = termMod.Terminal;

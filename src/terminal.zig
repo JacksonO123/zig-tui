@@ -4,9 +4,8 @@ const Writer = std.Io.Writer;
 
 const configMod = @import("config.zig");
 const sequences = @import("sequences.zig");
-const ui = @import("ui.zig");
 const utils = @import("utils.zig");
-const context = @import("context.zig");
+const contextMod = @import("context.zig");
 const types = @import("types.zig");
 
 const PollEventPipeFds = struct {
@@ -85,11 +84,11 @@ pub fn Terminal(comptime ModelType: type) type {
         }
 
         pub fn stateChanged(_: *Self) void {
-            if (context.globalState.rendering) {
-                context.globalState.needsRerender = true;
+            if (contextMod.globalState.rendering) {
+                contextMod.globalState.needsRerender = true;
             } else {
                 const byte: u8 = 1;
-                _ = std.c.write(context.globalState.writeFds.stateChange, @ptrCast(&byte), 1);
+                _ = std.c.write(contextMod.globalState.writeFds.stateChange, @ptrCast(&byte), 1);
             }
         }
     };
@@ -98,7 +97,7 @@ pub fn Terminal(comptime ModelType: type) type {
 fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
     _ = sig;
     const byte: u8 = 1;
-    _ = std.c.write(context.globalState.writeFds.resize, @ptrCast(&byte), 1);
+    _ = std.c.write(contextMod.globalState.writeFds.resize, @ptrCast(&byte), 1);
 }
 
 pub const TerminalInfo = struct {
@@ -120,7 +119,7 @@ pub const TerminalInfo = struct {
         const resizeFds = try Self.initPipeFds();
         const stateChangeFds = try Self.initPipeFds();
 
-        context.globalState.writeFds = .{
+        contextMod.globalState.writeFds = .{
             .resize = resizeFds.write,
             .stateChange = stateChangeFds.write,
         };

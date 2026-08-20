@@ -2,8 +2,6 @@ const std = @import("std");
 const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
 
-const bufferUtil = @import("buffer.zig");
-const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const sequences = @import("sequences.zig");
