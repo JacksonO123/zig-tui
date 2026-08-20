@@ -8,6 +8,7 @@ const sequences = @import("sequences.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
 const context = @import("context.zig");
+const types = @import("types.zig");
 
 const PollEventPipeFds = struct {
     read: std.posix.fd_t,
@@ -18,8 +19,8 @@ const PollEventsCollectionAllFds = struct {
     stateChange: PollEventPipeFds,
 };
 
-const PollEventsCollectionReadFds = utils.structFieldsToType(
-    utils.appendFieldToStruct(
+const PollEventsCollectionReadFds = types.structFieldsToType(
+    types.appendFieldToStruct(
         PollEventsCollectionAllFds,
         .{
             .name = "stdin",
@@ -34,7 +35,7 @@ const PollEventsCollectionReadFds = utils.structFieldsToType(
     std.posix.fd_t,
 );
 
-const PollEventsCollectionPollFds = utils.structFieldsToType(
+const PollEventsCollectionPollFds = types.structFieldsToType(
     PollEventsCollectionReadFds,
     std.posix.pollfd,
 );
