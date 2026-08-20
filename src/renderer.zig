@@ -69,6 +69,11 @@ pub fn render(
     }
 
     context.state.rowOffset = @intCast(context.backBuffer.lineLimit);
+
+    if (context.config.screenType == .Main) {
+        try sequences.setCursorPos(context, 1, 1, writer);
+    }
+
     context.state.forceFullRender = false;
 
     try writer.flush();

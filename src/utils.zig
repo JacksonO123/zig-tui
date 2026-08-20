@@ -3,6 +3,8 @@ const Allocator = std.mem.Allocator;
 
 const backBufferMod = @import("back_buffer.zig");
 const configMod = @import("config.zig");
+const contextMod = @import("context.zig");
+const RenderContext = contextMod.RenderContext;
 
 pub const Size = struct {
     height: u16 = 0,
@@ -124,7 +126,7 @@ pub fn appendFieldToStruct(
     );
 }
 
-pub fn getTermSize() !Size {
+pub fn getTermSize(config: configMod.Config) !Size {
     var winSize: std.posix.winsize = undefined;
     const fd = std.Io.File.stdout().handle;
     const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winSize));
@@ -132,7 +134,7 @@ pub fn getTermSize() !Size {
         return error.IoctlFailed;
     }
     return .{
-        .height = winSize.row,
+        .height = winSize.row - @as(u8, if (config.screenType == .Main) 1 else 0),
         .width = winSize.col,
     };
 }
@@ -143,4 +145,50 @@ pub fn pollFdHasInEvent(fd: std.posix.pollfd) bool {
 
 pub fn calculateRightPadding(config: configMod.Config) u16 {
     return config.rightPadding orelse @as(u16, if (config.screenType == .Main) 1 else 0);
+}
+
+pub fn readCursorPositionReport() !u16 {
+    var state: enum { esc, bracket, row, col } = .esc;
+    var rowVal: u16 = 0;
+    var colVal: u16 = 0;
+
+    var fds = [_]std.posix.pollfd{.{
+        .fd = std.posix.STDIN_FILENO,
+        .events = std.posix.POLL.IN,
+        .revents = 0,
+    }};
+
+    const timeoutMs: i32 = 200; // terminals reply near-instantly; bail rather than hang forever
+
+    while (true) {
+        const ready = try std.posix.poll(&fds, timeoutMs);
+        if (ready == 0) return error.UnexpectedEof; // no reply in time
+
+        var byte: [1]u8 = undefined;
+        const n = std.posix.read(std.posix.STDIN_FILENO, &byte) catch |err| switch (err) {
+            error.WouldBlock => continue, // not actually ready yet, poll again
+            else => return err,
+        };
+        if (n == 0) return error.UnexpectedEof;
+        const c = byte[0];
+
+        switch (state) {
+            .esc => if (c == 0x1b) {
+                state = .bracket;
+            },
+            .bracket => state = if (c == '[') .row else .esc,
+            .row => switch (c) {
+                '0'...'9' => rowVal = rowVal *% 10 +% (c - '0'),
+                ';' => state = .col,
+                else => return error.MalformedResponse,
+            },
+            .col => switch (c) {
+                '0'...'9' => colVal = colVal *% 10 +% (c - '0'),
+                'R' => {
+                    return rowVal;
+                },
+                else => return error.MalformedResponse,
+            },
+        }
+    }
 }
