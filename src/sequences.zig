@@ -62,8 +62,7 @@ pub const codes: Codes = .{
 };
 
 pub fn setCursorPos(
-    comptime ModelType: type,
-    context: *RenderContext(ModelType),
+    context: *RenderContext(anyopaque),
     row: u16,
     col: u16,
     writer: *Writer,
@@ -106,8 +105,7 @@ pub fn resetStyles(writer: *Writer) !void {
 }
 
 pub fn setCursorPosAbsolute(
-    comptime ModelType: type,
-    context: *RenderContext(ModelType),
+    context: *RenderContext(anyopaque),
     row: u16,
     col: u16,
     writer: *Writer,
@@ -141,8 +139,7 @@ pub fn disableItalicText(writer: *Writer) !void {
 }
 
 pub fn moveCursorUp(
-    comptime ModelType: type,
-    context: *RenderContext(ModelType),
+    context: *RenderContext(anyopaque),
     amount: u16,
     writer: *Writer,
 ) !void {
@@ -156,8 +153,7 @@ pub fn moveCursorUp(
 }
 
 pub fn moveCursorDown(
-    comptime ModelType: type,
-    context: *RenderContext(ModelType),
+    context: *RenderContext(anyopaque),
     amount: u16,
     writer: *Writer,
 ) !void {
@@ -212,8 +208,7 @@ pub fn disableAlternateScreen(writer: *Writer) !void {
 }
 
 pub fn simulateNewline(
-    comptime ModelType: type,
-    context: *RenderContext(ModelType),
+    context: *RenderContext(anyopaque),
     writer: *Writer,
 ) !void {
     switch (context.config.screenType) {
@@ -222,7 +217,6 @@ pub fn simulateNewline(
             context.state.rowOffset += 1;
         },
         .Alternate => try setCursorPosAbsolute(
-            ModelType,
             context,
             context.state.rowOffset + 1,
             1,

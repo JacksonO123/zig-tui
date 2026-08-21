@@ -71,13 +71,15 @@ pub fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
     return layout2;
 }
 
+const Test = struct { u32 };
+
 pub fn main(init: std.process.Init) !void {
     var stdoutBuf: [1024]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &stdoutBuf);
     const writer = &stdout.interface;
 
     var model = Model.init();
-    const context = try tui.initTuiLib(Model, init.gpa, init.io, config, &model, writer);
+    var context = try tui.initTuiLib(Model, init.gpa, init.io, config, &model, writer);
     defer {
         context.deinit(writer);
         init.gpa.destroy(context);
@@ -87,5 +89,14 @@ pub fn main(init: std.process.Init) !void {
         init.gpa.destroy(context);
     }
 
+    try context.onEvent("stdin", somethingHandler, .{context}, tui.events.StdinEvent);
+
     try tui.render(Model, context, renderUI, writer);
+}
+
+fn somethingHandler(
+    contextArgs: struct { *tui.RenderContext(Model) },
+    args: tui.events.StdinEvent,
+) void {
+    contextArgs[0].logger.logBufPrint(16, "{s}", .{args.data}) catch {};
 }

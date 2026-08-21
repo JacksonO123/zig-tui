@@ -7,7 +7,7 @@ const RenderContext = contextMod.RenderContext;
 const sequences = @import("sequences.zig");
 const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
-const utils = @import("utils.zig");
+const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
 
 pub fn RenderUIFn(comptime ModelType: type) type {
@@ -21,39 +21,37 @@ pub fn handleRender(
     renderUI: RenderUIFn(ModelType),
     writer: *Writer,
 ) !void {
-    renderContext.terminalInfo.prepareForReRender();
+    renderContext.terminalUtils.prepareForReRender();
     contextMod.globalState.rendering = true;
     const el = try renderUI(&renderContext.terminal);
-    try render(ModelType, gpa, renderContext, el, writer);
+    try render(gpa, @ptrCast(renderContext), el, writer);
     contextMod.globalState.rendering = false;
 }
 
 pub fn render(
-    comptime ModelType: type,
     allocator: Allocator,
-    context: *RenderContext(ModelType),
+    context: *RenderContext(anyopaque),
     el: *ui.UIElement,
     writer: *Writer,
 ) !void {
     if (context.config.screenType == .Alternate) {
-        try sequences.setCursorPosAbsolute(ModelType, context, 1, 1, writer);
+        try sequences.setCursorPosAbsolute(context, 1, 1, writer);
     } else {
-        try sequences.setCursorPos(ModelType, context, 1, 1, writer);
+        try sequences.setCursorPos(context, 1, 1, writer);
     }
 
     if (context.state.forceFullRender) {
         try sequences.eraseDisplayAfterCursor(writer);
     }
 
-    try context.backBuffer.reset(allocator, context.terminalInfo.size);
+    try context.backBuffer.reset(allocator, context.terminalUtils.size);
     {
-        var termSizeCopy = context.terminalInfo.size;
-        const rightPadding = utils.calculateRightPadding(context.config);
+        var termSizeCopy = context.terminalUtils.size;
+        const rightPadding = terminalUtils.calculateRightPadding(context.config);
         termSizeCopy.width -= rightPadding;
 
         try ui.setElementDimensions(
-            ModelType,
-            context.terminalInfo.renderArena.allocator(),
+            context.terminalUtils.renderArena.allocator(),
             context,
             el,
             termSizeCopy,
@@ -61,15 +59,15 @@ pub fn render(
             .{},
         );
     }
-    try context.backBuffer.renderInBuffer(allocator, el, context.terminalInfo.size);
-    try writeDiff(ModelType, allocator, context, context.terminalInfo.size, writer);
+    try context.backBuffer.renderInBuffer(allocator, el, context.terminalUtils.size);
+    try writeDiff(allocator, context, context.terminalUtils.size, writer);
 
     try sequences.resetStyles(writer);
     context.backBuffer.rendering = .{};
     context.frontBuffer.rendering = .{};
 
     const lastBackBufferLine = context.backBuffer.buffer.items[context.backBuffer.lineLimit - 1].items;
-    if (lastBackBufferLine.len < context.terminalInfo.size.width) {
+    if (lastBackBufferLine.len < context.terminalUtils.size.width) {
         try sequences.setCursorCol(@intCast(lastBackBufferLine.len), writer);
         try sequences.eraseDisplayAfterCursor(writer);
     }
@@ -77,7 +75,7 @@ pub fn render(
     context.state.rowOffset = @intCast(context.backBuffer.lineLimit);
 
     if (context.config.screenType == .Main) {
-        try sequences.setCursorPos(ModelType, context, 1, 1, writer);
+        try sequences.setCursorPos(context, 1, 1, writer);
     }
 
     context.state.forceFullRender = false;
@@ -86,10 +84,9 @@ pub fn render(
 }
 
 fn writeDiff(
-    comptime ModelType: type,
     allocator: Allocator,
-    context: *contextMod.RenderContext(ModelType),
-    size: utils.Size,
+    context: *contextMod.RenderContext(anyopaque),
+    size: terminalUtils.Size,
     writer: *Writer,
 ) !void {
     try context.frontBuffer.matchSize(allocator, context.backBuffer.lineLimit, size.width);
@@ -97,7 +94,7 @@ fn writeDiff(
     var atCol: usize = 0;
     const frontBufferLines = context.frontBuffer.buffer.items[0..context.frontBuffer.lineLimit];
     const backBufferLines = context.backBuffer.buffer.items[0..context.backBuffer.lineLimit];
-    const rightPadding = utils.calculateRightPadding(context.config);
+    const rightPadding = terminalUtils.calculateRightPadding(context.config);
     for (frontBufferLines, backBufferLines, 0..) |*frontLine, *backLine, rowIndex| {
         for (frontLine.items, backLine.items, 0..) |frontCell, backCell, cellIndex| {
             if (cellIndex >= size.width - rightPadding) break;
@@ -120,7 +117,7 @@ fn writeDiff(
         context.frontBuffer.rendering.bg = .None;
 
         if (rowIndex + 1 < frontBufferLines.len) {
-            try sequences.simulateNewline(ModelType, context, writer);
+            try sequences.simulateNewline(context, writer);
         }
 
         atCol = 0;

@@ -6,16 +6,19 @@ const c = @import("c");
 
 const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
+const eventListeners = @import("event_listeners.zig");
 const renderer = @import("renderer.zig");
 const termMod = @import("terminal.zig");
 const ui = @import("ui.zig");
-const utils = @import("utils.zig");
+const terminalUtils = @import("terminal_utils.zig");
 
 pub const Config = configMod.Config;
 pub const Terminal = termMod.Terminal;
 pub const UIElement = ui.UIElement;
 pub const Text = ui.Text;
 pub const Layout = ui.Layout;
+pub const RenderContext = contextMod.RenderContext;
+pub const events = @import("event_types.zig");
 
 pub inline fn initTuiLib(
     comptime ModelType: type,
@@ -33,6 +36,7 @@ pub inline fn initTuiLib(
         model,
         writer,
     );
+    try contextMod.postInit(@ptrCast(ptr), writer);
     return ptr;
 }
 
@@ -44,14 +48,14 @@ pub fn render(
 ) !void {
     while (true) {
         const timeoutMs: i32 = if (contextMod.globalState.needsRerender) 1 else -1;
-        const pollData, const readData = try context.terminalInfo.pollEvents(timeoutMs);
+        const pollData, const readData = try context.terminalUtils.pollEvents(timeoutMs);
 
         const neededRerender = contextMod.globalState.needsRerender;
         contextMod.globalState.needsRerender = false;
 
         if (pollData.includes(.Resize)) {
-            const size = try utils.getTermSize(context.config);
-            context.terminalInfo.onTerminalResize(context.config, &context.state, size);
+            const size = try terminalUtils.getTermSize(context.config);
+            context.terminalUtils.onTerminalResize(context.config, &context.state, size);
             try renderer.handleRender(ModelType, context.gpa, context, renderUI, writer);
         }
 
@@ -67,6 +71,8 @@ pub fn render(
                     else => {},
                 }
             }
+
+            context.emitEvent("stdin", events.StdinEvent{ .data = readData });
         }
     }
 }

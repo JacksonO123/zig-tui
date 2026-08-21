@@ -5,7 +5,7 @@ const Writer = std.Io.Writer;
 const bufferUtil = @import("buffer.zig");
 const stylesMod = @import("styles.zig");
 const ui = @import("ui.zig");
-const utils = @import("utils.zig");
+const terminalUtils = @import("terminal_utils.zig");
 
 pub const BackBuffer = struct {
     const Self = @This();
@@ -16,7 +16,7 @@ pub const BackBuffer = struct {
 
     pub inline fn init(
         allocator: Allocator,
-        size: utils.Size,
+        size: terminalUtils.Size,
     ) !Self {
         var lines: bufferUtil.CharBuffer = .empty;
         const line = try bufferUtil.createLine(allocator, size.width);
@@ -31,7 +31,7 @@ pub const BackBuffer = struct {
     pub fn reset(
         self: *Self,
         allocator: Allocator,
-        size: utils.Size,
+        size: terminalUtils.Size,
     ) !void {
         for (self.buffer.items) |*line| {
             try bufferUtil.prepareLineBuffer(allocator, line, size.width, .All);
@@ -52,7 +52,7 @@ pub const BackBuffer = struct {
         self: *Self,
         allocator: Allocator,
         element: *ui.UIElement,
-        size: utils.Size,
+        size: terminalUtils.Size,
     ) !void {
         const preAdjust = ui.getPreAdjustment(element.styles);
         const simpleStyles = element.styles.toSimpleStyles();
@@ -77,7 +77,7 @@ pub const BackBuffer = struct {
 
         switch (element.variant) {
             .Text => |text| {
-                const basePos = utils.Pos{
+                const basePos = terminalUtils.Pos{
                     .x = element.layoutInfo.x + preAdjust.width,
                     .y = element.layoutInfo.y + preAdjust.height,
                 };
@@ -120,9 +120,9 @@ pub const BackBuffer = struct {
         allocator: Allocator,
         layoutInfo: ui.ElementLayoutInfo,
         styles: stylesMod.Styles,
-        size: utils.Size,
+        size: terminalUtils.Size,
     ) !void {
-        var pos = utils.Pos{
+        var pos = terminalUtils.Pos{
             .x = layoutInfo.x,
             .y = layoutInfo.y,
         };
@@ -243,8 +243,8 @@ pub const BackBuffer = struct {
     fn writeCharAtPos(
         self: *Self,
         allocator: Allocator,
-        size: utils.Size,
-        pos: utils.Pos,
+        size: terminalUtils.Size,
+        pos: terminalUtils.Pos,
         char: u8,
         styles: stylesMod.SimpleDataStyle,
     ) !void {
@@ -261,8 +261,8 @@ pub const BackBuffer = struct {
     fn writeUnicodeAtPos(
         self: *Self,
         allocator: Allocator,
-        size: utils.Size,
-        pos: utils.Pos,
+        size: terminalUtils.Size,
+        pos: terminalUtils.Pos,
         chars: []const u8,
         styles: stylesMod.SimpleDataStyle,
     ) !void {

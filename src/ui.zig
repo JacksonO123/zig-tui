@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
-const utils = @import("utils.zig");
+const terminalUtils = @import("terminal_utils.zig");
 
 pub const ElementLayoutInfo = struct {
     width: u16 = 0,
@@ -159,13 +159,12 @@ pub const Layout = union(LayoutTypes) {
 var logged = false;
 
 pub fn setElementDimensions(
-    comptime ModelType: type,
     allocator: Allocator,
-    context: *RenderContext(ModelType),
+    context: *RenderContext(anyopaque),
     element: *UIElement,
-    sizeConstraint: utils.Size,
+    sizeConstraint: terminalUtils.Size,
     constraint: Constraint,
-    writePos: utils.Pos,
+    writePos: terminalUtils.Pos,
 ) !void {
     var elInfo: ElementLayoutInfo = .{
         .x = writePos.x,
@@ -276,12 +275,11 @@ pub fn setElementDimensions(
                         else
                             .{ sizeConstraint, constraint };
 
-                        const innerElPos = utils.Pos{
+                        const innerElPos = terminalUtils.Pos{
                             .x = elInfo.x + preAdjust.width + elInfo.width,
                             .y = elInfo.y + preAdjust.height,
                         };
                         try setElementDimensions(
-                            ModelType,
                             allocator,
                             context,
                             el,
@@ -384,12 +382,11 @@ pub fn setElementDimensions(
                         else
                             .{ sizeConstraint, constraint };
 
-                        const innerElPos = utils.Pos{
+                        const innerElPos = terminalUtils.Pos{
                             .x = elInfo.x + preAdjust.width,
                             .y = elInfo.y + preAdjust.height + elInfo.height,
                         };
                         try setElementDimensions(
-                            ModelType,
                             allocator,
                             context,
                             el,
@@ -492,11 +489,11 @@ fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u16, fillSiz
 }
 
 fn getSizeConstraint(
-    currentSize: utils.Size,
+    currentSize: terminalUtils.Size,
     constraint: Constraint,
     fillWidthPerEl: ?u16,
     fillHeightPerEl: ?u16,
-) utils.Size {
+) terminalUtils.Size {
     var sizeCpy = currentSize;
 
     sizeCpy.width = applySizeConstraint(constraint.width, sizeCpy.width, fillWidthPerEl);
@@ -505,8 +502,8 @@ fn getSizeConstraint(
     return sizeCpy;
 }
 
-pub fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {
-    var adjustment: utils.Size = .{};
+pub fn getPreAdjustment(styles: stylesMod.Styles) terminalUtils.Size {
+    var adjustment: terminalUtils.Size = .{};
 
     if (styles.hasBorder()) {
         adjustment.width += 1;
@@ -519,8 +516,8 @@ pub fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {
     return adjustment;
 }
 
-pub fn getPostAdjustment(styles: stylesMod.Styles) utils.Size {
-    var adjustment: utils.Size = .{};
+pub fn getPostAdjustment(styles: stylesMod.Styles) terminalUtils.Size {
+    var adjustment: terminalUtils.Size = .{};
 
     if (styles.hasBorder()) {
         adjustment.width += 1;
