@@ -51,7 +51,7 @@ pub fn render(
 
         if (pollData.includes(.Resize)) {
             const size = try utils.getTermSize(context.config);
-            context.onTerminalResize(size);
+            context.terminalInfo.onTerminalResize(context.config, &context.state, size);
             try renderer.handleRender(ModelType, context.gpa, context, renderUI, writer);
         }
 

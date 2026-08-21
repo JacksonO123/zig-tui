@@ -275,4 +275,21 @@ pub const TerminalInfo = struct {
 
         return .{ pollData, readData };
     }
+
+    pub fn onTerminalResize(
+        self: *Self,
+        config: configMod.Config,
+        state: *contextMod.RenderState,
+        size: utils.Size,
+    ) void {
+        self.size = size;
+        if (config.screenType == .Main and size.height < state.rowOffset) {
+            state.rowOffset = 1;
+        }
+        state.forceFullRender = true;
+    }
+
+    pub fn prepareForReRender(self: *Self) void {
+        _ = self.renderArena.reset(.retain_capacity);
+    }
 };

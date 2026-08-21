@@ -21,7 +21,7 @@ pub fn handleRender(
     renderUI: RenderUIFn(ModelType),
     writer: *Writer,
 ) !void {
-    renderContext.prepareForReRender();
+    renderContext.terminalInfo.prepareForReRender();
     contextMod.globalState.rendering = true;
     const el = try renderUI(&renderContext.terminal);
     try render(ModelType, gpa, renderContext, el, writer);

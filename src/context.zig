@@ -8,6 +8,7 @@ const frontBufferMod = @import("front_buffer.zig");
 const logMod = @import("logger.zig");
 const terminalMod = @import("terminal.zig");
 const utils = @import("utils.zig");
+const eventListenersMod = @import("event_listeners.zig");
 
 pub const GlobalState = struct {
     writeFds: terminalMod.WriteFds,
@@ -35,6 +36,7 @@ pub fn RenderContext(comptime ModelType: type) type {
         terminalInfo: terminalMod.TerminalInfo,
         state: RenderState = .{},
         logger: logMod.Logger,
+        eventListeners: eventListenersMod.EventListenerCollection,
 
         pub inline fn init(
             gpa: Allocator,
@@ -61,6 +63,7 @@ pub fn RenderContext(comptime ModelType: type) type {
                 .frontBuffer = .empty,
                 .model = model,
                 .logger = logger,
+                .eventListeners = eventListenersMod.EventListenerCollection.init(),
             };
         }
 
@@ -71,18 +74,6 @@ pub fn RenderContext(comptime ModelType: type) type {
             self.backBuffer.deinit(self.gpa);
             self.frontBuffer.deinit(self.gpa);
             self.terminalInfo.deinit(self.config, writer);
-        }
-
-        pub fn onTerminalResize(self: *Self, size: utils.Size) void {
-            self.terminalInfo.size = size;
-            if (self.config.screenType == .Main and size.height < self.state.rowOffset) {
-                self.state.rowOffset = 1;
-            }
-            self.state.forceFullRender = true;
-        }
-
-        pub fn prepareForReRender(self: *Self) void {
-            _ = self.terminalInfo.renderArena.reset(.retain_capacity);
         }
     };
 }
