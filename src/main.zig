@@ -89,14 +89,14 @@ pub fn main(init: std.process.Init) !void {
         init.gpa.destroy(context);
     }
 
-    try context.onEvent("stdin", somethingHandler, .{context}, tui.events.StdinEvent);
+    // try context.onEvent("stdin", somethingHandler, .{context}, Test);
 
     try tui.render(Model, context, renderUI, writer);
 }
 
 fn somethingHandler(
     contextArgs: struct { *tui.RenderContext(Model) },
-    args: tui.events.StdinEvent,
+    args: Test,
 ) void {
-    contextArgs[0].logger.logBufPrint(16, "{s}", .{args.data}) catch {};
+    contextArgs[0].logger.logBufPrint(16, "{d}", .{args.@"0"}) catch {};
 }

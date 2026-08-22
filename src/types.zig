@@ -155,3 +155,21 @@ pub fn changeFieldType(comptime Struct: type, comptime fieldName: []const u8, co
         &fieldAttributes,
     );
 }
+
+pub fn tupleFromFnParams(comptime Func: type, comptime skip: usize) type {
+    const funcType = if (@typeInfo(Func) != .@"fn")
+        @compileError("Expected func type")
+    else
+        @typeInfo(Func).@"fn";
+
+    if (skip > funcType.params.len) @compileError("Expected skip <= fields.len");
+
+    var tupleTypes: [funcType.params.len - skip]type = undefined;
+
+    for (funcType.params[skip..], 0..) |param, index| {
+        if (param.type == null) @compileError("Expected known param type");
+        tupleTypes[index] = param.type.?;
+    }
+
+    return @Tuple(&tupleTypes);
+}

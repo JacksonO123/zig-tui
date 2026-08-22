@@ -36,7 +36,7 @@ pub inline fn initTuiLib(
         model,
         writer,
     );
-    try contextMod.postInit(@ptrCast(ptr), writer);
+    try contextMod.postInit(ModelType, ptr, writer);
     return ptr;
 }
 
@@ -72,7 +72,7 @@ pub fn render(
                 }
             }
 
-            context.emitEvent("stdin", events.StdinEvent{ .data = readData });
+            // context.emitEvent("stdin", events.StdinEvent{ .data = readData });
         }
     }
 }

@@ -84,26 +84,22 @@ pub fn RenderContext(comptime ModelType: type) type {
             self.terminalUtils.deinit(self.config, writer);
             self.eventListeners.deinit();
         }
-
-        pub fn onEvent(
-            self: *Self,
-            name: []const u8,
-            comptime handler: anytype,
-            args: anytype,
-            comptime AdditionalArgs: type,
-        ) !void {
-            try self.eventListeners.onEvent(AdditionalArgs, name, handler, args);
-        }
-
-        pub fn emitEvent(self: *Self, name: []const u8, args: anytype) void {
-            self.eventListeners.emitEvent(name, args);
-        }
     };
 }
 
-pub fn postInit(context: *RenderContext(anyopaque), writer: *Writer) !void {
+pub fn postInit(
+    comptime ModelType: type,
+    context: *RenderContext(ModelType),
+    writer: *Writer,
+) !void {
     if (context.config.screenType == .Alternate) {
         try sequences.clearScreen(writer);
         try writer.flush();
     }
+
+    try context.eventListeners.register(
+        "stdin",
+        fn (*RenderContext(ModelType), data: []const u8) void,
+        .{context},
+    );
 }
