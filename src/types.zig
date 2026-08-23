@@ -1,15 +1,12 @@
 const std = @import("std");
 
 pub fn setEnumBackingInt(comptime Enum: type, comptime tagType: type) type {
-    const enumType = if (@typeInfo(Enum) != .@"enum")
-        @compileError("Expected enum")
-    else
-        @typeInfo(Enum).@"enum";
+    const enumType = @typeInfo(Enum).@"enum";
 
     var fieldNames: [enumType.fields.len][]const u8 = undefined;
     var fieldValues: [enumType.fields.len]tagType = undefined;
 
-    for (enumType.fields, 0..) |field, index| {
+    inline for (enumType.fields, 0..) |field, index| {
         fieldNames[index] = field.name;
         fieldValues[index] = @intCast(field.value);
     }
@@ -23,9 +20,7 @@ pub fn setEnumBackingInt(comptime Enum: type, comptime tagType: type) type {
 }
 
 pub fn structFieldsToType(comptime Struct: type, comptime ToType: type) type {
-    const structTypeBefore = @typeInfo(Struct);
-    if (structTypeBefore != .@"struct") @compileError("Expected struct for index transform");
-    const structType = structTypeBefore.@"struct";
+    const structType = @typeInfo(Struct).@"struct";
 
     var fieldNames: [structType.fields.len][]const u8 = undefined;
     var fieldTypes: [structType.fields.len]type = undefined;
@@ -58,9 +53,7 @@ pub fn appendFieldToStruct(
         attributes: std.builtin.Type.StructField.Attributes,
     },
 ) type {
-    const structTypeBefore = @typeInfo(Struct);
-    if (structTypeBefore != .@"struct") @compileError("Expected struct for index transform");
-    const structType = structTypeBefore.@"struct";
+    const structType = @typeInfo(Struct).@"struct";
 
     var fieldNames: [structType.fields.len + 1][]const u8 = undefined;
     var fieldTypes: [structType.fields.len + 1]type = undefined;
@@ -94,9 +87,7 @@ pub fn setStructLayoutAndBackingInt(
     comptime layout: std.builtin.Type.ContainerLayout,
     comptime backingInt: ?type,
 ) type {
-    const structTypeBefore = @typeInfo(Struct);
-    if (structTypeBefore != .@"struct") @compileError("Expected struct for index transform");
-    const structType = structTypeBefore.@"struct";
+    const structType = @typeInfo(Struct).@"struct";
 
     var fieldNames: [structType.fields.len][]const u8 = undefined;
     var fieldTypes: [structType.fields.len]type = undefined;
@@ -122,10 +113,7 @@ pub fn setStructLayoutAndBackingInt(
 }
 
 pub fn changeFieldType(comptime Struct: type, comptime fieldName: []const u8, comptime ToType: type) type {
-    const structType = if (@typeInfo(Struct) != .@"struct")
-        @compileError("Expected struct")
-    else
-        @typeInfo(Struct).@"struct";
+    const structType = @typeInfo(Struct).@"struct";
 
     if (!@hasField(Struct, fieldName)) @compileError("Expected struct to have field " ++ fieldName);
 
@@ -157,19 +145,45 @@ pub fn changeFieldType(comptime Struct: type, comptime fieldName: []const u8, co
 }
 
 pub fn tupleFromFnParams(comptime Func: type, comptime skip: usize) type {
-    const funcType = if (@typeInfo(Func) != .@"fn")
-        @compileError("Expected func type")
-    else
-        @typeInfo(Func).@"fn";
+    const funcType = @typeInfo(Func).@"fn";
 
     if (skip > funcType.params.len) @compileError("Expected skip <= fields.len");
 
     var tupleTypes: [funcType.params.len - skip]type = undefined;
 
-    for (funcType.params[skip..], 0..) |param, index| {
+    inline for (funcType.params[skip..], 0..) |param, index| {
         if (param.type == null) @compileError("Expected known param type");
         tupleTypes[index] = param.type.?;
     }
 
     return @Tuple(&tupleTypes);
+}
+
+pub fn tupleToTypeSlice(comptime Tuple: type) [@typeInfo(Tuple).@"struct".fields.len]type {
+    const tupleType = @typeInfo(Tuple).@"struct";
+    var types: [tupleType.fields.len]type = undefined;
+
+    inline for (tupleType.fields, 0..) |field, index| {
+        types[index] = field.type;
+    }
+
+    return types;
+}
+
+pub fn combineTuples(comptime Tuple1: type, comptime Tuple2: type) type {
+    const tuple1Info = @typeInfo(Tuple1).@"struct";
+    const tuple2Info = @typeInfo(Tuple2).@"struct";
+    var types: [tuple1Info.fields.len + tuple2Info.fields.len]type = undefined;
+
+    var index: usize = 0;
+    for (tuple1Info.fields) |field| {
+        defer index += 1;
+        types[index] = field.type;
+    }
+    for (tuple2Info.fields) |field| {
+        defer index += 1;
+        types[index] = field.type;
+    }
+
+    return @Tuple(&types);
 }

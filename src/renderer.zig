@@ -17,7 +17,7 @@ pub fn RenderUIFn(comptime ModelType: type) type {
 pub fn handleRender(
     comptime ModelType: type,
     gpa: Allocator,
-    renderContext: *RenderContext(ModelType),
+    renderContext: *RenderContext(ModelType, void),
     renderUI: RenderUIFn(ModelType),
     writer: *Writer,
 ) !void {
@@ -30,7 +30,7 @@ pub fn handleRender(
 
 pub fn render(
     allocator: Allocator,
-    context: *RenderContext(anyopaque),
+    context: *RenderContext(anyopaque, void),
     el: *ui.UIElement,
     writer: *Writer,
 ) !void {
@@ -85,7 +85,7 @@ pub fn render(
 
 fn writeDiff(
     allocator: Allocator,
-    context: *contextMod.RenderContext(anyopaque),
+    context: *contextMod.RenderContext(anyopaque, void),
     size: terminalUtils.Size,
     writer: *Writer,
 ) !void {

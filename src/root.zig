@@ -6,11 +6,11 @@ const c = @import("c");
 
 const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
-const eventListeners = @import("event_listeners.zig");
+const eventListeners = @import("events/event_listeners.zig");
 const renderer = @import("renderer.zig");
+const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
 const ui = @import("ui.zig");
-const terminalUtils = @import("terminal_utils.zig");
 
 pub const Config = configMod.Config;
 pub const Terminal = termMod.Terminal;
@@ -18,7 +18,15 @@ pub const UIElement = ui.UIElement;
 pub const Text = ui.Text;
 pub const Layout = ui.Layout;
 pub const RenderContext = contextMod.RenderContext;
-pub const events = @import("event_types.zig");
+pub const events = @import("events/event_exports.zig");
+
+pub const baseEvents: []const eventListeners.EventDescription = &.{
+    .{
+        .name = "stdin",
+        .baseArgs = struct { *align(std.meta.alignment(RenderContext(anyopaque, void))) anyopaque },
+        .args = events.StdinEvent,
+    },
+};
 
 pub inline fn initTuiLib(
     comptime ModelType: type,
@@ -27,22 +35,29 @@ pub inline fn initTuiLib(
     config: configMod.Config,
     model: *ModelType,
     writer: *Writer,
-) !*contextMod.RenderContext(ModelType) {
-    const ptr = try gpa.create(contextMod.RenderContext(ModelType));
-    ptr.* = try contextMod.RenderContext(ModelType).init(
+) !*contextMod.RenderContext(ModelType, eventListeners.formatRegisteredEvents(baseEvents)) {
+    const RenderContextType = contextMod.RenderContext(
+        ModelType,
+        eventListeners.formatRegisteredEvents(baseEvents),
+    );
+    const ptr = try gpa.create(RenderContextType);
+    ptr.* = try RenderContextType.init(
         gpa,
         io,
         config,
         model,
         writer,
     );
-    try contextMod.postInit(ModelType, ptr, writer);
+    try contextMod.postInit(@ptrCast(ptr), writer);
     return ptr;
 }
 
 pub fn render(
     comptime ModelType: type,
-    context: *contextMod.RenderContext(ModelType),
+    context: *contextMod.RenderContext(
+        ModelType,
+        eventListeners.formatRegisteredEvents(baseEvents),
+    ),
     renderUI: renderer.RenderUIFn(ModelType),
     writer: *Writer,
 ) !void {
@@ -56,11 +71,11 @@ pub fn render(
         if (pollData.includes(.Resize)) {
             const size = try terminalUtils.getTermSize(context.config);
             context.terminalUtils.onTerminalResize(context.config, &context.state, size);
-            try renderer.handleRender(ModelType, context.gpa, context, renderUI, writer);
+            try renderer.handleRender(ModelType, context.gpa, @ptrCast(context), renderUI, writer);
         }
 
         if (pollData.includes(.StateChange) or neededRerender) {
-            try renderer.handleRender(ModelType, context.gpa, context, renderUI, writer);
+            try renderer.handleRender(ModelType, context.gpa, @ptrCast(context), renderUI, writer);
         }
 
         if (pollData.includes(.Stdin)) {
@@ -72,7 +87,7 @@ pub fn render(
                 }
             }
 
-            // context.emitEvent("stdin", events.StdinEvent{ .data = readData });
+            try context.emit("stdin", .{readData});
         }
     }
 }

@@ -62,7 +62,7 @@ pub const codes: Codes = .{
 };
 
 pub fn setCursorPos(
-    context: *RenderContext(anyopaque),
+    context: *RenderContext(anyopaque, void),
     row: u16,
     col: u16,
     writer: *Writer,
@@ -105,7 +105,7 @@ pub fn resetStyles(writer: *Writer) !void {
 }
 
 pub fn setCursorPosAbsolute(
-    context: *RenderContext(anyopaque),
+    context: *RenderContext(anyopaque, void),
     row: u16,
     col: u16,
     writer: *Writer,
@@ -208,7 +208,7 @@ pub fn disableAlternateScreen(writer: *Writer) !void {
 }
 
 pub fn simulateNewline(
-    context: *RenderContext(anyopaque),
+    context: *RenderContext(anyopaque, void),
     writer: *Writer,
 ) !void {
     switch (context.config.screenType) {

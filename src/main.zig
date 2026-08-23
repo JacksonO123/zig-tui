@@ -71,8 +71,6 @@ pub fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
     return layout2;
 }
 
-const Test = struct { u32 };
-
 pub fn main(init: std.process.Init) !void {
     var stdoutBuf: [1024]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &stdoutBuf);
@@ -89,14 +87,22 @@ pub fn main(init: std.process.Init) !void {
         init.gpa.destroy(context);
     }
 
-    // try context.onEvent("stdin", somethingHandler, .{context}, Test);
+    try context.registerBaseArgs(.{
+        .{
+            "stdin",
+            .{@as(*align(std.meta.alignment(@TypeOf(context))) anyopaque, @ptrCast(context))},
+        },
+    });
+
+    try context.eventListeners.on("stdin", somethingHandler);
 
     try tui.render(Model, context, renderUI, writer);
 }
 
 fn somethingHandler(
-    contextArgs: struct { *tui.RenderContext(Model) },
-    args: Test,
+    contextPtr: *align(std.meta.alignment(*tui.RenderContext(Model, void))) anyopaque,
+    data: []const u8,
 ) void {
-    contextArgs[0].logger.logBufPrint(16, "{d}", .{args.@"0"}) catch {};
+    const context: *tui.RenderContext(Model, void) = @ptrCast(contextPtr);
+    context.logger.logBufPrint(16, "{s}", .{data}) catch {};
 }
