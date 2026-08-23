@@ -4,7 +4,7 @@ const Writer = std.Io.Writer;
 
 const backBufferMod = @import("back_buffer.zig");
 const configMod = @import("config.zig");
-const eventListenersMod = @import("event_listeners.zig");
+const eventListenersMod = @import("events/event_listeners.zig");
 const frontBufferMod = @import("front_buffer.zig");
 const logMod = @import("logger.zig");
 const sequences = @import("sequences.zig");
@@ -30,9 +30,11 @@ pub const RenderState = struct {
     size: terminalUtils.Size = .{},
 };
 
-pub fn RenderContext(comptime ModelType: type) type {
+pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) type {
     return struct {
         const Self = @This();
+
+        const EventListenerCollection = eventListenersMod.EventListenerCollection(RegisterEvents);
 
         gpa: Allocator,
         model: *ModelType,
@@ -43,7 +45,7 @@ pub fn RenderContext(comptime ModelType: type) type {
         terminalUtils: terminalUtils.TerminalUtils,
         state: RenderState,
         logger: logMod.Logger,
-        eventListeners: eventListenersMod.EventListenerCollection,
+        eventListeners: *EventListenerCollection,
 
         pub inline fn init(
             gpa: Allocator,
@@ -59,7 +61,9 @@ pub fn RenderContext(comptime ModelType: type) type {
                 gpa,
             );
             const logger = try logMod.Logger.init(io);
-            const eventListenersCollection = try eventListenersMod.EventListenerCollection.init(gpa);
+
+            const eventListenersPtr = try gpa.create(EventListenerCollection);
+            eventListenersPtr.* = try EventListenerCollection.init(gpa);
 
             return .{
                 .gpa = gpa,
@@ -70,8 +74,8 @@ pub fn RenderContext(comptime ModelType: type) type {
                 .frontBuffer = .empty,
                 .model = model,
                 .logger = logger,
-                .eventListeners = eventListenersCollection,
                 .state = .{},
+                .eventListeners = eventListenersPtr,
             };
         }
 
@@ -83,25 +87,27 @@ pub fn RenderContext(comptime ModelType: type) type {
             self.frontBuffer.deinit(self.gpa);
             self.terminalUtils.deinit(self.config, writer);
             self.eventListeners.deinit();
+            self.gpa.destroy(self.eventListeners);
         }
 
-        pub fn onEvent(
-            self: *Self,
-            name: []const u8,
-            comptime handler: anytype,
-            args: anytype,
-            comptime AdditionalArgs: type,
-        ) !void {
-            try self.eventListeners.onEvent(AdditionalArgs, name, handler, args);
+        pub fn registerBaseArgs(self: *Self, argValues: anytype) !void {
+            try self.eventListeners.registerBaseArgs(argValues);
         }
 
-        pub fn emitEvent(self: *Self, name: []const u8, args: anytype) void {
-            self.eventListeners.emitEvent(name, args);
+        pub fn on(self: *Self, comptime name: []const u8, handler: anytype) !void {
+            try self.eventListeners.on(name, handler);
+        }
+
+        pub fn emit(self: *Self, comptime name: []const u8, payload: anytype) !void {
+            try self.eventListeners.emit(name, payload);
         }
     };
 }
 
-pub fn postInit(context: *RenderContext(anyopaque), writer: *Writer) !void {
+pub fn postInit(
+    context: *RenderContext(anyopaque, void),
+    writer: *Writer,
+) !void {
     if (context.config.screenType == .Alternate) {
         try sequences.clearScreen(writer);
         try writer.flush();

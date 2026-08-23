@@ -160,7 +160,7 @@ var logged = false;
 
 pub fn setElementDimensions(
     allocator: Allocator,
-    context: *RenderContext(anyopaque),
+    context: *RenderContext(anyopaque, void),
     element: *UIElement,
     sizeConstraint: terminalUtils.Size,
     constraint: Constraint,
