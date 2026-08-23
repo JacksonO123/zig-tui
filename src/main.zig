@@ -1,4 +1,6 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+
 const tui = @import("zig_tui");
 
 const config: tui.Config = .{
@@ -10,9 +12,14 @@ pub const Model = struct {
 
     count: usize = 0,
     toRender: usize = 0,
+    string: []const u8 = &.{},
 
     pub fn init() Self {
         return .{};
+    }
+
+    pub fn deinit(self: *Self, gpa: Allocator) void {
+        gpa.free(self.string);
     }
 };
 
@@ -34,15 +41,20 @@ pub fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
     var block2 = try tui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
     _ = block2.styles.padding(1).bold().bg(.Red).border(.Square);
 
-    var block3 = try tui.Text.fromConstText(allocator, "line one\nline two is longer\nthird");
+    const fmtString1 = try std.fmt.allocPrint(
+        terminal.renderAlloc,
+        "line one\nline two is longer\n{s}",
+        .{terminal.model.string},
+    );
+    var block3 = try tui.Text.fromConstText(allocator, fmtString1);
     _ = block3.styles.padding(1).bold().bg(.Green).border(.Square);
 
-    const fmtString = try std.fmt.allocPrint(
+    const fmtString2 = try std.fmt.allocPrint(
         terminal.renderAlloc,
         "plain text, no styles: {d}.",
         .{terminal.model.toRender},
     );
-    const plain = try tui.Text.fromConstText(allocator, fmtString);
+    const plain = try tui.Text.fromConstText(allocator, fmtString2);
 
     const layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
@@ -86,6 +98,7 @@ pub fn main(init: std.process.Init) !void {
         context.deinit(writer);
         init.gpa.destroy(context);
     }
+    defer model.deinit(context.terminal.gpa);
 
     try context.registerBaseArgs(.{
         .{
@@ -94,15 +107,24 @@ pub fn main(init: std.process.Init) !void {
         },
     });
 
-    try context.eventListeners.on("stdin", somethingHandler);
+    try context.eventListeners.on("stdin", stdinHandler);
 
     try tui.render(Model, context, renderUI, writer);
 }
 
-fn somethingHandler(
+fn stdinHandler(
     contextPtr: *align(std.meta.alignment(*tui.RenderContext(Model, void))) anyopaque,
     data: []const u8,
 ) void {
     const context: *tui.RenderContext(Model, void) = @ptrCast(contextPtr);
     context.logger.logBufPrint(16, "{s}", .{data}) catch {};
+
+    const newString = std.fmt.allocPrint(
+        context.terminal.gpa,
+        "{s}{s}",
+        .{ context.terminal.model.string, data },
+    ) catch "";
+    context.terminal.gpa.free(context.terminal.model.string);
+    context.terminal.model.string = newString;
+    context.terminal.stateChanged();
 }
