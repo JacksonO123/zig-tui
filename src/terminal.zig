@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const contextMod = @import("context.zig");
+const logMod = @import("logger.zig");
 
 pub fn Terminal(comptime ModelType: type) type {
     return struct {
@@ -10,13 +11,20 @@ pub fn Terminal(comptime ModelType: type) type {
         renderAlloc: Allocator,
         gpa: Allocator,
         model: *ModelType,
+        logger: *logMod.Logger,
 
         pub fn init(
             allocator: Allocator,
             model: *ModelType,
             gpa: Allocator,
+            logger: *logMod.Logger,
         ) Self {
-            return .{ .renderAlloc = allocator, .gpa = gpa, .model = model };
+            return .{
+                .renderAlloc = allocator,
+                .gpa = gpa,
+                .model = model,
+                .logger = logger,
+            };
         }
 
         pub fn stateChanged(_: *Self) void {

@@ -21,11 +21,7 @@ pub const RenderContext = contextMod.RenderContext;
 pub const events = @import("events/event_exports.zig");
 
 pub const baseEvents: []const eventListeners.EventDescription = &.{
-    .{
-        .name = "stdin",
-        .baseArgs = struct { *align(std.meta.alignment(RenderContext(anyopaque, void))) anyopaque },
-        .args = events.StdinEvent,
-    },
+    .{ .name = "stdin", .args = events.StdinEvent },
 };
 
 pub inline fn initTuiLib(

@@ -39,12 +39,12 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
         gpa: Allocator,
         model: *ModelType,
         config: configMod.Config,
-        terminal: terminalMod.Terminal(ModelType),
+        terminal: *terminalMod.Terminal(ModelType),
         backBuffer: backBufferMod.BackBuffer,
         frontBuffer: frontBufferMod.FrontBuffer,
         terminalUtils: terminalUtils.TerminalUtils,
         state: RenderState,
-        logger: logMod.Logger,
+        logger: *logMod.Logger,
         eventListeners: *EventListenerCollection,
 
         pub inline fn init(
@@ -54,13 +54,17 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             model: *ModelType,
             writer: *Writer,
         ) !Self {
+            const logger = try gpa.create(logMod.Logger);
+            logger.* = try logMod.Logger.init(io);
+
             var termUtils = try terminalUtils.TerminalUtils.init(config, writer);
-            const terminal = terminalMod.Terminal(ModelType).init(
+            const terminal = try gpa.create(terminalMod.Terminal(ModelType));
+            terminal.* = terminalMod.Terminal(ModelType).init(
                 termUtils.renderArena.allocator(),
                 model,
                 gpa,
+                logger,
             );
-            const logger = try logMod.Logger.init(io);
 
             const eventListenersPtr = try gpa.create(EventListenerCollection);
             eventListenersPtr.* = try EventListenerCollection.init(gpa);
@@ -88,14 +92,17 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             self.terminalUtils.deinit(self.config, writer);
             self.eventListeners.deinit();
             self.gpa.destroy(self.eventListeners);
+            self.gpa.destroy(self.logger);
+            self.gpa.destroy(self.terminal);
         }
 
-        pub fn registerBaseArgs(self: *Self, argValues: anytype) !void {
-            try self.eventListeners.registerBaseArgs(argValues);
-        }
-
-        pub fn on(self: *Self, comptime name: []const u8, handler: anytype) !void {
-            try self.eventListeners.on(name, handler);
+        pub fn on(
+            self: *Self,
+            comptime name: []const u8,
+            baseArgs: anytype,
+            comptime handler: anytype,
+        ) !void {
+            try self.eventListeners.on(name, baseArgs, handler);
         }
 
         pub fn emit(self: *Self, comptime name: []const u8, payload: anytype) !void {

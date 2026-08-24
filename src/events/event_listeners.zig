@@ -7,45 +7,53 @@ const EventSystemError = error{
     BaseArgsNotInitialized,
 };
 
-const BaseArgInstance = struct {
+const ListenerInstancePayload = struct {
+    baseArgs: *anyopaque,
+    handler: *const anyopaque,
+};
+
+const ListenerInstance = struct {
     const Self = @This();
 
-    ptr: *anyopaque,
+    payload: ListenerInstancePayload,
     vtable: struct {
-        destroy: *const fn (*anyopaque, Allocator) void,
-        call: *const fn (*anyopaque, *const anyopaque, *const anyopaque) void,
+        destroy: *const fn (*ListenerInstancePayload, Allocator) void,
+        call: *const fn (*ListenerInstancePayload, *const anyopaque) void,
     },
 
     pub fn init(
         allocator: Allocator,
-        value: anytype,
         comptime HandlerType: type,
         comptime AdditionalArgsType: type,
+        comptime handler: HandlerType,
+        baseArg: anytype,
     ) !Self {
-        const ArgsType = @TypeOf(value);
+        const ArgsType = @TypeOf(baseArg);
         const ptr = try allocator.create(ArgsType);
-        ptr.* = value;
+        ptr.* = baseArg;
 
         const Funcs = struct {
-            fn destroy(localPtr: *anyopaque, localAllocator: Allocator) void {
-                const baseArgs: *ArgsType = @ptrCast(@alignCast(localPtr));
+            fn destroy(payload: *ListenerInstancePayload, localAllocator: Allocator) void {
+                const baseArgs: *ArgsType = @ptrCast(@alignCast(payload.baseArgs));
                 localAllocator.destroy(baseArgs);
             }
 
             fn call(
-                localPtr: *anyopaque,
-                handlerPtr: *const anyopaque,
+                payload: *ListenerInstancePayload,
                 argsPtr: *const anyopaque,
             ) void {
-                const baseArgs: *ArgsType = @ptrCast(@alignCast(localPtr));
+                const baseArgs: *ArgsType = @ptrCast(@alignCast(payload.baseArgs));
                 const args: *const AdditionalArgsType = @ptrCast(@alignCast(argsPtr));
-                const handler: HandlerType = @ptrCast(@alignCast(handlerPtr));
-                @call(.auto, handler, baseArgs.* ++ args.*);
+                const localHandler: HandlerType = @ptrCast(@alignCast(payload.handler));
+                @call(.auto, localHandler, baseArgs.* ++ args.*);
             }
         };
 
         return .{
-            .ptr = ptr,
+            .payload = .{
+                .baseArgs = ptr,
+                .handler = handler,
+            },
             .vtable = .{
                 .destroy = Funcs.destroy,
                 .call = Funcs.call,
@@ -53,28 +61,26 @@ const BaseArgInstance = struct {
         };
     }
 
-    pub fn destroy(self: Self, allocator: Allocator) void {
-        self.vtable.destroy(self.ptr, allocator);
+    pub fn destroy(self: *Self, allocator: Allocator) void {
+        self.vtable.destroy(&self.payload, allocator);
     }
 
-    pub fn callHandlerWithArgs(
-        self: Self,
-        handler: *const anyopaque,
+    pub fn call(
+        self: *Self,
         args: *const anyopaque,
     ) void {
-        self.vtable.call(self.ptr, handler, args);
+        self.vtable.call(&self.payload, args);
     }
 };
 
 pub fn EventListenerCollection(comptime RegisterEvents: type) type {
     return struct {
         const Self = @This();
-        const ListenerList = std.ArrayList(*const anyopaque);
+        const ListenerList = std.ArrayList(ListenerInstance);
         const ListenerMap = std.StringHashMap(*ListenerList);
         const CollectionType = enum { Preserved, Temporary };
 
         allocator: Allocator,
-        baseArgMap: std.StringHashMap(BaseArgInstance),
         preservedListeners: *ListenerMap,
         temporaryListeners: *ListenerMap,
 
@@ -85,11 +91,8 @@ pub fn EventListenerCollection(comptime RegisterEvents: type) type {
             const temporaryListenersPtr = try gpa.create(ListenerMap);
             temporaryListenersPtr.* = ListenerMap.init(gpa);
 
-            const baseArgMap = std.StringHashMap(BaseArgInstance).init(gpa);
-
             return .{
                 .allocator = gpa,
-                .baseArgMap = baseArgMap,
                 .preservedListeners = preservedListenersPtr,
                 .temporaryListeners = temporaryListenersPtr,
             };
@@ -98,17 +101,14 @@ pub fn EventListenerCollection(comptime RegisterEvents: type) type {
         pub fn deinit(self: *Self) void {
             self.deinitListenerCollection(self.preservedListeners);
             self.deinitListenerCollection(self.temporaryListeners);
-
-            var argIt = self.baseArgMap.valueIterator();
-            while (argIt.next()) |argInst| {
-                argInst.destroy(self.allocator);
-            }
-            self.baseArgMap.deinit();
         }
 
         fn deinitListenerCollection(self: *Self, collection: *ListenerMap) void {
             var collectionIt = collection.valueIterator();
             while (collectionIt.next()) |value| {
+                for (value.*.items) |*listener| {
+                    listener.destroy(self.allocator);
+                }
                 value.*.deinit(self.allocator);
                 self.allocator.destroy(value.*);
             }
@@ -117,36 +117,30 @@ pub fn EventListenerCollection(comptime RegisterEvents: type) type {
             self.allocator.destroy(collection);
         }
 
-        pub fn registerBaseArgs(self: *Self, argValues: anytype) !void {
-            inline for (argValues) |value| {
-                const RegisteredTypes = @FieldType(RegisterEvents, value.@"0");
-                const ValueType = RegisteredTypes.BaseArgs;
-                const typedValue: ValueType = value.@"1";
-                const argInst = try BaseArgInstance.init(
-                    self.allocator,
-                    typedValue,
-                    RegisteredTypes.Handler,
-                    RegisteredTypes.Args,
-                );
-                try self.baseArgMap.put(value.@"0", argInst);
-            }
-        }
-
         pub fn on(
             self: *Self,
             comptime name: []const u8,
-            comptime handler: @FieldType(RegisterEvents, name).Handler,
+            baseArgs: anytype,
+            comptime handler: *const @FieldType(
+                RegisterEvents,
+                name,
+            ).getHandler(@TypeOf(baseArgs)),
         ) !void {
-            if (!self.baseArgMap.contains(name)) {
-                return EventSystemError.BaseArgsNotInitialized;
-            }
+            const registeredTypes = @FieldType(RegisterEvents, name);
+            const listenerInstance = try ListenerInstance.init(
+                self.allocator,
+                *const registeredTypes.getHandler(@TypeOf(baseArgs)),
+                registeredTypes.Args,
+                handler,
+                baseArgs,
+            );
 
             if (self.preservedListeners.get(name)) |listeners| {
-                try listeners.append(self.allocator, @ptrCast(handler));
+                try listeners.append(self.allocator, listenerInstance);
             } else {
                 var listeners = try self.allocator.create(ListenerList);
                 listeners.* = .empty;
-                try listeners.append(self.allocator, @ptrCast(handler));
+                try listeners.append(self.allocator, listenerInstance);
                 try self.preservedListeners.put(name, listeners);
             }
         }
@@ -156,33 +150,32 @@ pub fn EventListenerCollection(comptime RegisterEvents: type) type {
             comptime name: []const u8,
             payload: @FieldType(RegisterEvents, name).Args,
         ) !void {
-            const baseArgs = self.baseArgMap.get(name) orelse
-                return EventSystemError.BaseArgsNotInitialized;
             if (self.preservedListeners.get(name)) |listeners| {
-                for (listeners.items) |listener| {
-                    baseArgs.callHandlerWithArgs(listener, @ptrCast(&payload));
+                for (listeners.items) |*listener| {
+                    listener.call(@ptrCast(&payload));
                 }
             }
         }
     };
 }
 
-fn Event(comptime BaseArgsType: type, comptime ArgsType: type) type {
+fn Event(comptime ArgsType: type) type {
     return struct {
-        pub const BaseArgs = BaseArgsType;
         pub const Args = ArgsType;
-        pub const Handler = *const @Fn(
-            &types.tupleToTypeSlice(types.combineTuples(BaseArgs, Args)),
-            &@splat(.{}),
-            void,
-            .{},
-        );
+
+        pub fn getHandler(comptime BaseArgs: type) type {
+            return @Fn(
+                &types.tupleToTypeSlice(types.combineTuples(BaseArgs, Args)),
+                &@splat(.{}),
+                void,
+                .{},
+            );
+        }
     };
 }
 
 pub const EventDescription = struct {
     name: []const u8,
-    baseArgs: type,
     args: type,
 };
 
@@ -192,7 +185,7 @@ pub fn formatRegisteredEvents(comptime eventDescription: []const EventDescriptio
 
     inline for (eventDescription, 0..) |description, index| {
         fieldNames[index] = description.name;
-        fieldTypes[index] = Event(description.baseArgs, description.args);
+        fieldTypes[index] = Event(description.args);
     }
 
     const res = @Struct(.auto, null, &fieldNames, &fieldTypes, &@splat(.{}));

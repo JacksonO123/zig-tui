@@ -100,31 +100,20 @@ pub fn main(init: std.process.Init) !void {
     }
     defer model.deinit(context.terminal.gpa);
 
-    try context.registerBaseArgs(.{
-        .{
-            "stdin",
-            .{@as(*align(std.meta.alignment(@TypeOf(context))) anyopaque, @ptrCast(context))},
-        },
-    });
-
-    try context.eventListeners.on("stdin", stdinHandler);
+    try context.on("stdin", .{context.terminal}, stdinHandler);
 
     try tui.render(Model, context, renderUI, writer);
 }
 
-fn stdinHandler(
-    contextPtr: *align(std.meta.alignment(*tui.RenderContext(Model, void))) anyopaque,
-    data: []const u8,
-) void {
-    const context: *tui.RenderContext(Model, void) = @ptrCast(contextPtr);
-    context.logger.logBufPrint(16, "{s}", .{data}) catch {};
+fn stdinHandler(terminal: *tui.Terminal(Model), data: []const u8) void {
+    terminal.logger.logBufPrint(16, "{s}", .{data}) catch {};
 
     const newString = std.fmt.allocPrint(
-        context.terminal.gpa,
+        terminal.gpa,
         "{s}{s}",
-        .{ context.terminal.model.string, data },
+        .{ terminal.model.string, data },
     ) catch "";
-    context.terminal.gpa.free(context.terminal.model.string);
-    context.terminal.model.string = newString;
-    context.terminal.stateChanged();
+    terminal.gpa.free(terminal.model.string);
+    terminal.model.string = newString;
+    terminal.stateChanged();
 }

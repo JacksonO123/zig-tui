@@ -23,7 +23,7 @@ pub fn handleRender(
 ) !void {
     renderContext.terminalUtils.prepareForReRender();
     contextMod.globalState.rendering = true;
-    const el = try renderUI(&renderContext.terminal);
+    const el = try renderUI(renderContext.terminal);
     try render(gpa, @ptrCast(renderContext), el, writer);
     contextMod.globalState.rendering = false;
 }
