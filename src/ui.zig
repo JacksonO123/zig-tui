@@ -182,44 +182,66 @@ pub fn setElementDimensions(
             var lines: std.ArrayList([]u8) = .empty;
             var line: std.ArrayList(u8) = .empty;
 
-            while (i < text.data.len) : (i += 1) {
-                const char = text.data[i];
-
-                if (char == '\n') {
-                    const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
-                    if (currentElHeight >= sizeConstraint.height) {
-                        break;
+            if (preAdjust.height + postAdjust.height < sizeConstraint.height) {
+                while (i < text.data.len) {
+                    var incI = true;
+                    defer {
+                        if (incI) i += 1;
                     }
 
-                    try lines.append(allocator, line.items);
-                    line = .empty;
-                    elInfo.height += 1;
-                    currentX = 0;
+                    const char = text.data[i];
 
-                    continue;
-                }
+                    if (char == '\n') {
+                        const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
+                        if (currentElHeight >= sizeConstraint.height) {
+                            break;
+                        }
 
-                if (currentX + preAdjust.width + postAdjust.width >= sizeConstraint.width) {
-                    while (i < text.data.len and text.data[i] != '\n') : (i += 1) {}
+                        try lines.append(allocator, line.items);
+                        line = .empty;
+                        elInfo.height += 1;
+                        currentX = 0;
 
-                    if (i >= text.data.len or text.data[i] != '\n') break;
-
-                    const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
-                    if (currentElHeight >= sizeConstraint.height) {
-                        break;
+                        continue;
                     }
 
-                    try lines.append(allocator, line.items);
-                    line = .empty;
-                    elInfo.height += 1;
-                    currentX = 0;
+                    if (currentX + preAdjust.width + postAdjust.width >= sizeConstraint.width) {
+                        if (element.styles.styles.wordWrap) {
+                            const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
+                            if (currentElHeight >= sizeConstraint.height) {
+                                break;
+                            }
 
-                    continue;
+                            try lines.append(allocator, line.items);
+                            line = .empty;
+                            elInfo.height += 1;
+                            currentX = 0;
+                            incI = false;
+
+                            continue;
+                        }
+
+                        while (i < text.data.len and text.data[i] != '\n') : (i += 1) {}
+
+                        if (i >= text.data.len or text.data[i] != '\n') break;
+
+                        const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
+                        if (currentElHeight >= sizeConstraint.height) {
+                            break;
+                        }
+
+                        try lines.append(allocator, line.items);
+                        line = .empty;
+                        elInfo.height += 1;
+                        currentX = 0;
+
+                        continue;
+                    }
+
+                    try line.append(allocator, char);
+                    currentX += 1;
+                    elInfo.width = @max(elInfo.width, currentX);
                 }
-
-                try line.append(allocator, char);
-                currentX += 1;
-                elInfo.width = @max(elInfo.width, currentX);
             }
 
             if (line.items.len > 0) {
@@ -232,7 +254,7 @@ pub fn setElementDimensions(
                 .Value, .Percent, .Ratio => true,
                 .Max, .Min, .None, .Fill => false,
             };
-            const maxHeightWithConstraintValue = switch (constraint.width) {
+            const maxHeightWithConstraintValue = switch (constraint.height) {
                 .Value, .Percent, .Ratio => true,
                 .Max, .Min, .None, .Fill => false,
             };
@@ -243,11 +265,19 @@ pub fn setElementDimensions(
             else
                 finalElWidth;
 
+            if (constraint.width == .Min) {
+                elInfo.width = @max(elInfo.width, constraint.width.Min);
+            }
+
             const finalElHeight = elInfo.height + preAdjust.height + postAdjust.height;
             elInfo.height = if (maxHeightWithConstraintValue)
                 @max(finalElHeight, sizeConstraint.height)
             else
                 finalElHeight;
+
+            if (constraint.height == .Min) {
+                elInfo.height = @max(elInfo.height, constraint.height.Min);
+            }
         },
         .Layout => |layout| {
             elInfo.width += preAdjust.width + postAdjust.width;

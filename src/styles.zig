@@ -88,6 +88,7 @@ pub const StyleConfig = struct {
     fg: Color = .None,
     bg: Color = .None,
     gap: u16 = 0,
+    wordWrap: bool = false,
 };
 
 pub const Styles = struct {
@@ -183,6 +184,11 @@ pub const Styles = struct {
 
     pub fn gap(self: *Self, amount: u16) *Self {
         self.styles.gap = amount;
+        return self;
+    }
+
+    pub fn wordWrap(self: *Self, wrap: bool) *Self {
+        self.styles.wordWrap = wrap;
         return self;
     }
 };
