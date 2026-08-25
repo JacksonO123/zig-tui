@@ -17,11 +17,6 @@ pub const Pos = struct {
     y: u16 = 0,
 };
 
-pub const WriteFds = struct {
-    resize: std.posix.fd_t,
-    stateChange: std.posix.fd_t,
-};
-
 var savedTermios: ?std.posix.termios = null;
 
 pub fn enableRawMode() !void {
@@ -56,15 +51,6 @@ pub fn disableRawMode() void {
     savedTermios = null;
 }
 
-pub fn setFdAsNonblocking(fd: std.posix.fd_t) !void {
-    const rawFlags = std.c.fcntl(fd, std.c.F.GETFL);
-    if (rawFlags < 0) return error.FcntlFailed;
-    var o: std.c.O = @bitCast(rawFlags);
-    o.NONBLOCK = true;
-    const newFlags: c_int = @bitCast(o);
-    if (std.c.fcntl(fd, std.c.F.SETFL, newFlags) < 0) return error.FcntlFailed;
-}
-
 pub fn getTermSize(config: configMod.Config) !Size {
     var winSize: std.posix.winsize = undefined;
     const fd = std.Io.File.stdout().handle;
@@ -84,14 +70,6 @@ pub fn pollFdHasInEvent(fd: std.posix.pollfd) bool {
 
 pub fn calculateRightPadding(config: configMod.Config) u16 {
     return config.rightPadding orelse @as(u16, if (config.screenType == .Main) 1 else 0);
-}
-
-fn initPipeFds() !PollEventPipeFds {
-    var pipeFds: [2]std.posix.fd_t = undefined;
-    if (std.c.pipe(&pipeFds) < 0) return error.PipeFailed;
-    try setFdAsNonblocking(pipeFds[0]);
-    try setFdAsNonblocking(pipeFds[1]);
-    return .{ .read = pipeFds[0], .write = pipeFds[1] };
 }
 
 fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
@@ -122,44 +100,13 @@ fn deinitTermBehavior(config: configMod.Config, writer: *Writer) !void {
     try writer.flush();
 }
 
-const PollEventPipeFds = struct {
-    read: std.posix.fd_t,
-    write: std.posix.fd_t,
-};
-
-const PollEventsCollectionAllFds = struct {
-    resize: PollEventPipeFds,
-    stateChange: PollEventPipeFds,
-};
-
-const PollEventsCollectionReadFds = types.structFieldsToType(
-    types.appendFieldToStruct(
-        PollEventsCollectionAllFds,
-        .{
-            .name = "stdin",
-            .type = void,
-            .attributes = .{
-                .@"comptime" = false,
-                .@"align" = null,
-                .default_value_ptr = null,
-            },
-        },
-    ),
-    std.posix.fd_t,
-);
-
-const PollEventsCollectionPollFds = types.structFieldsToType(
-    PollEventsCollectionReadFds,
-    std.posix.pollfd,
-);
-
 const PollEvents = enum(u8) {
     Resize = 0b1,
     Stdin = 0b10,
     StateChange = 0b100,
 };
 
-pub const PollEventData = struct {
+pub const EventData = struct {
     const Self = @This();
 
     data: @typeInfo(PollEvents).@"enum".tag_type,
@@ -181,13 +128,12 @@ pub const TerminalUtils = struct {
     const Self = @This();
 
     size: Size,
-    pollFds: PollEventsCollectionAllFds,
-    pollEventData: PollEventsCollectionPollFds,
-    pollArena: std.heap.ArenaAllocator,
+    stdinPollFd: std.posix.pollfd,
+    eventArena: std.heap.ArenaAllocator,
     renderArena: std.heap.ArenaAllocator,
 
-    pub fn init(config: configMod.Config, writer: *Writer) !Self {
-        const pollArena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    pub fn init(gpa: Allocator, config: configMod.Config, writer: *Writer) !Self {
+        const eventArena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         const renderArena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 
         const size = try getTermSize(config);
@@ -195,57 +141,32 @@ pub const TerminalUtils = struct {
             try setTermBehavior(config, writer);
         }
 
-        const resizeFds = try initPipeFds();
-        const stateChangeFds = try initPipeFds();
+        const terminalEvent = try gpa.create(std.Io.Event);
+        terminalEvent.* = .unset;
 
-        contextMod.globalState.writeFds = .{
-            .resize = resizeFds.write,
-            .stateChange = stateChangeFds.write,
-        };
+        contextMod.globalState.terminalEvent = terminalEvent;
 
         initResizeEvent();
         const stdinFd = std.Io.File.stdin().handle;
-        const pollFds: PollEventsCollectionReadFds = .{
-            .stdin = stdinFd,
-            .resize = resizeFds.read,
-            .stateChange = stateChangeFds.read,
-        };
-
-        const pollEventData = pollFdsToEventData(pollFds);
-
-        const pollPipeFds = PollEventsCollectionAllFds{
-            .resize = resizeFds,
-            .stateChange = stateChangeFds,
+        const stdinPollFd: std.posix.pollfd = .{
+            .fd = stdinFd,
+            .events = std.posix.POLL.IN,
+            .revents = 0,
         };
 
         return .{
             .size = size,
-            .pollFds = pollPipeFds,
-            .pollEventData = pollEventData,
-            .pollArena = pollArena,
+            .stdinPollFd = stdinPollFd,
+            .eventArena = eventArena,
             .renderArena = renderArena,
         };
     }
 
-    pub fn deinit(self: *Self, config: configMod.Config, writer: *Writer) void {
-        self.pollArena.deinit();
+    pub fn deinit(self: *Self, gpa: Allocator, config: configMod.Config, writer: *Writer) void {
+        gpa.destroy(self.terminalEvent);
+        self.eventArena.deinit();
         self.renderArena.deinit();
-        self.deinitPollEvents();
         deinitTermBehavior(config, writer) catch {};
-    }
-
-    fn pollFdsToEventData(readFds: PollEventsCollectionReadFds) PollEventsCollectionPollFds {
-        var pollFds: PollEventsCollectionPollFds = undefined;
-
-        inline for (@typeInfo(PollEventsCollectionReadFds).@"struct".fields) |field| {
-            @field(pollFds, field.name) = .{
-                .fd = @field(readFds, field.name),
-                .events = std.posix.POLL.IN,
-                .revents = 0,
-            };
-        }
-
-        return pollFds;
     }
 
     fn initResizeEvent() void {
@@ -259,70 +180,50 @@ pub const TerminalUtils = struct {
 
     fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
         _ = sig;
-        const byte: u8 = 1;
-        _ = std.c.write(contextMod.globalState.writeFds.resize, @ptrCast(&byte), 1);
+        var threadedIo = std.Io.Threaded.init_single_threaded;
+        contextMod.globalState.terminalEvent.set(threadedIo.io());
     }
 
-    fn deinitPollEvents(self: Self) void {
-        inline for (@typeInfo(PollEventsCollectionAllFds).@"struct".fields) |field| {
-            const fds = @field(self.pollFds, field.name);
-            _ = std.c.close(fds.read);
-            _ = std.c.close(fds.write);
-        }
-    }
-
-    pub fn pollEvents(self: *Self, timeout: i32) !struct { PollEventData, []const u8 } {
+    pub fn pollEvents(self: *Self, io: std.Io, timeout: i32) !struct { EventData, []const u8 } {
         const stdinFd = std.Io.File.stdin().handle;
+        _ = stdinFd;
 
-        _ = self.pollArena.reset(.retain_capacity);
-        const allocator = self.pollArena.allocator();
-        _ = try std.posix.poll(@ptrCast(&self.pollEventData), timeout);
+        _ = self.eventArena.reset(.retain_capacity);
+        const allocator = self.eventArena.allocator();
+        _ = allocator;
+        contextMod.globalState.terminalEvent.waitTimeout(io, timeout);
+        // _ = try std.posix.poll(@ptrCast(&self.stdinPollFd), timeout);
 
-        var pollData = PollEventData.init();
-        var readData: []const u8 = &.{};
+        var eventData = EventData.init();
+        // var readData: []const u8 = &.{};
+        const readData: []const u8 = &.{};
 
-        if (pollFdHasInEvent(self.pollEventData.resize)) {
-            var drainBuf: [64]u8 = undefined;
-            while (true) {
-                _ = std.posix.read(self.pollFds.resize.read, &drainBuf) catch |err| switch (err) {
-                    error.WouldBlock => break,
-                    else => return err,
-                };
-            }
-            pollData.append(.Resize);
+        if (contextMod.globalState.eventStatus.resize) {
+            contextMod.globalState.eventStatus.resize = false;
+            eventData.append(.Resize);
         }
 
-        if (pollFdHasInEvent(self.pollEventData.stdin)) a: {
-            var buf: [64]u8 = undefined;
-            const bytesRead = std.posix.read(stdinFd, &buf) catch |err| switch (err) {
-                error.WouldBlock => break :a,
-                else => return err,
-            };
+        // if (pollFdHasInEvent(self.stdinPollFd)) a: {
+        //     var buf: [64]u8 = undefined;
+        //     const bytesRead = std.posix.read(stdinFd, &buf) catch |err| switch (err) {
+        //         error.WouldBlock => break :a,
+        //         else => return err,
+        //     };
 
-            pollData.append(.Stdin);
+        //     eventData.append(.Stdin);
 
-            if (bytesRead == 0) break :a;
+        //     if (bytesRead == 0) break :a;
 
-            const clonedData = try allocator.dupe(u8, buf[0..bytesRead]);
-            readData = clonedData;
+        //     const clonedData = try allocator.dupe(u8, buf[0..bytesRead]);
+        //     readData = clonedData;
+        // }
+
+        if (contextMod.globalState.eventStatus.stateChange) {
+            contextMod.globalState.eventStatus.stateChange = false;
+            eventData.append(.StateChange);
         }
 
-        if (pollFdHasInEvent(self.pollEventData.stateChange)) {
-            var buf: [64]u8 = undefined;
-            while (true) {
-                _ = std.posix.read(
-                    self.pollFds.stateChange.read,
-                    &buf,
-                ) catch |err| switch (err) {
-                    error.WouldBlock => break,
-                    else => return err,
-                };
-            }
-
-            pollData.append(.StateChange);
-        }
-
-        return .{ pollData, readData };
+        return .{ eventData, readData };
     }
 
     pub fn onTerminalResize(

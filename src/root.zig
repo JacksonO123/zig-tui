@@ -50,6 +50,7 @@ pub inline fn initTuiLib(
 
 pub fn render(
     comptime ModelType: type,
+    io: std.Io,
     context: *contextMod.RenderContext(
         ModelType,
         eventListeners.formatRegisteredEvents(baseEvents),
@@ -59,7 +60,7 @@ pub fn render(
 ) !void {
     while (true) {
         const timeoutMs: i32 = if (contextMod.globalState.needsRerender) 1 else -1;
-        const pollData, const readData = try context.terminalUtils.pollEvents(timeoutMs);
+        const pollData, const readData = try context.terminalUtils.pollEvents(io, timeoutMs);
 
         const neededRerender = contextMod.globalState.needsRerender;
         contextMod.globalState.needsRerender = false;
