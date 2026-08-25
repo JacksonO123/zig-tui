@@ -31,8 +31,8 @@ pub fn Terminal(comptime ModelType: type) type {
             if (contextMod.globalState.rendering) {
                 contextMod.globalState.needsRerender = true;
             } else {
-                const byte: u8 = 1;
-                _ = std.c.write(contextMod.globalState.writeFds.stateChange, @ptrCast(&byte), 1);
+                const terminalEvent = contextMod.globalState.terminalEvent orelse return;
+                terminalEvent.set();
             }
         }
     };

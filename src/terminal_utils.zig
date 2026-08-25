@@ -142,8 +142,11 @@ pub const TerminalUtils = struct {
         }
 
         const terminalEvent = try gpa.create(std.Io.Event);
-        terminalEvent.* = .unset;
+        terminalEvent.* = .waiting;
 
+        if (contextMod.globalState.terminalEvent != null) {
+            return error.TerminalEventAlreadyExists;
+        }
         contextMod.globalState.terminalEvent = terminalEvent;
 
         initResizeEvent();
@@ -163,7 +166,9 @@ pub const TerminalUtils = struct {
     }
 
     pub fn deinit(self: *Self, gpa: Allocator, config: configMod.Config, writer: *Writer) void {
-        gpa.destroy(self.terminalEvent);
+        if (contextMod.globalState.terminalEvent) |event| {
+            gpa.destroy(event);
+        }
         self.eventArena.deinit();
         self.renderArena.deinit();
         deinitTermBehavior(config, writer) catch {};
@@ -181,17 +186,26 @@ pub const TerminalUtils = struct {
     fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
         _ = sig;
         var threadedIo = std.Io.Threaded.init_single_threaded;
-        contextMod.globalState.terminalEvent.set(threadedIo.io());
+        const terminalEvent = contextMod.globalState.terminalEvent orelse return;
+        terminalEvent.set(threadedIo.io());
     }
 
-    pub fn pollEvents(self: *Self, io: std.Io, timeout: i32) !struct { EventData, []const u8 } {
+    pub fn pollEvents(self: *Self, io: std.Io, timeout: ?u32) !struct { EventData, []const u8 } {
+        const terminalEvent = contextMod.globalState.terminalEvent orelse return error.MissingTerminalEvent;
+
         const stdinFd = std.Io.File.stdin().handle;
         _ = stdinFd;
 
         _ = self.eventArena.reset(.retain_capacity);
         const allocator = self.eventArena.allocator();
         _ = allocator;
-        contextMod.globalState.terminalEvent.waitTimeout(io, timeout);
+        const ioTimeout = if (timeout) |value| std.Io.Timeout{
+            .duration = .{
+                .raw = std.Io.Duration.fromMilliseconds(value),
+                .clock = .boot,
+            },
+        } else std.Io.Timeout.none;
+        terminalEvent.waitTimeout(io, ioTimeout) catch {};
         // _ = try std.posix.poll(@ptrCast(&self.stdinPollFd), timeout);
 
         var eventData = EventData.init();

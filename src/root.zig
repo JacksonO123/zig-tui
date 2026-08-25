@@ -59,9 +59,8 @@ pub fn render(
     writer: *Writer,
 ) !void {
     while (true) {
-        const timeoutMs: i32 = if (contextMod.globalState.needsRerender) 1 else -1;
+        const timeoutMs: ?u32 = if (contextMod.globalState.needsRerender) 1 else null;
         const pollData, const readData = try context.terminalUtils.pollEvents(io, timeoutMs);
-
         const neededRerender = contextMod.globalState.needsRerender;
         contextMod.globalState.needsRerender = false;
 

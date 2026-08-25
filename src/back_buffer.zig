@@ -15,12 +15,12 @@ pub const BackBuffer = struct {
     rendering: stylesMod.SimpleDataStyle = .{},
 
     pub inline fn init(
-        allocator: Allocator,
+        gpa: Allocator,
         size: terminalUtils.Size,
     ) !Self {
         var lines: bufferUtil.CharBuffer = .empty;
-        const line = try bufferUtil.createLine(allocator, size.width);
-        try lines.append(allocator, line);
+        const line = try bufferUtil.createLine(gpa, size.width);
+        try lines.append(gpa, line);
 
         return .{
             .buffer = lines,

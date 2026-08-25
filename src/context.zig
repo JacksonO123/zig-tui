@@ -21,12 +21,12 @@ pub const GlobalState = struct {
         resize: bool = false,
         stateChange: bool = false,
     } = .{},
-    terminalEvent: *std.Io.Event,
+    terminalEvent: ?*std.Io.Event = null,
     needsRerender: bool = true,
     rendering: bool = false,
 };
 
-pub var globalState: GlobalState = .{ .terminalEvent = undefined };
+pub var globalState: GlobalState = .{};
 
 pub const RenderState = struct {
     rowOffset: u16 = 1,
@@ -44,7 +44,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
         model: *ModelType,
         config: configMod.Config,
         terminal: *terminalMod.Terminal(ModelType),
-        backBuffer: backBufferMod.BackBuffer,
+        backBuffer: *backBufferMod.BackBuffer,
         frontBuffer: frontBufferMod.FrontBuffer,
         terminalUtils: terminalUtils.TerminalUtils,
         state: RenderState,
@@ -70,6 +70,9 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
                 logger,
             );
 
+            const backBuffer = try gpa.create(backBufferMod.BackBuffer);
+            backBuffer.* = try backBufferMod.BackBuffer.init(gpa, termUtils.size);
+
             const eventListenersPtr = try gpa.create(EventListenerCollection);
             eventListenersPtr.* = try EventListenerCollection.init(gpa);
 
@@ -78,7 +81,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
                 .terminal = terminal,
                 .terminalUtils = termUtils,
                 .config = config,
-                .backBuffer = try backBufferMod.BackBuffer.init(gpa, termUtils.size),
+                .backBuffer = backBuffer,
                 .frontBuffer = .empty,
                 .model = model,
                 .logger = logger,
@@ -92,6 +95,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             writer: *Writer,
         ) void {
             self.backBuffer.deinit(self.gpa);
+            self.gpa.destroy(self.backBuffer);
             self.frontBuffer.deinit(self.gpa);
             self.terminalUtils.deinit(self.gpa, self.config, writer);
             self.eventListeners.deinit();
