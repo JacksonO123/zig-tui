@@ -12,6 +12,8 @@ const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 
+const globalState = &@import("global.zig").globalState;
+
 pub const Config = configMod.Config;
 pub const Terminal = termMod.Terminal;
 pub const UIElement = ui.UIElement;
@@ -59,10 +61,10 @@ pub fn render(
     writer: *Writer,
 ) !void {
     while (true) {
-        const timeoutMs: ?u32 = if (contextMod.globalState.needsRerender) 1 else null;
-        const pollData, const readData = try context.terminalUtils.pollEvents(io, timeoutMs);
-        const neededRerender = contextMod.globalState.needsRerender;
-        contextMod.globalState.needsRerender = false;
+        defer globalState.eventUtil.event.reset();
+        const pollData, const readData = try context.terminalUtils.pollEvents(io);
+        const neededRerender = globalState.needsRerender;
+        globalState.needsRerender = false;
 
         if (pollData.includes(.Resize)) {
             const size = try terminalUtils.getTermSize(context.config);

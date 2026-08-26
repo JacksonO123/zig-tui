@@ -8,15 +8,16 @@ const stylesMod = @import("styles.zig");
 pub const FrontBuffer = struct {
     const Self = @This();
 
-    buffer: std.ArrayList(bufferUtil.BufferLine) = .empty,
+    buffer: std.ArrayList(*bufferUtil.BufferLine) = .empty,
     lineLimit: usize = 0,
     rendering: stylesMod.SimpleDataStyle = .{},
 
     pub const empty: Self = .{};
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
-        for (self.buffer.items) |*line| {
+        for (self.buffer.items) |line| {
             line.deinit(allocator);
+            allocator.destroy(line);
         }
 
         self.buffer.deinit(allocator);
@@ -35,11 +36,11 @@ pub const FrontBuffer = struct {
 
         self.lineLimit = lineLimit;
 
-        for (self.buffer.items[self.lineLimit..]) |*line| {
+        for (self.buffer.items[self.lineLimit..]) |line| {
             try bufferUtil.prepareLineBuffer(allocator, line, width, .All);
         }
 
-        for (self.buffer.items[0..self.lineLimit]) |*line| {
+        for (self.buffer.items[0..self.lineLimit]) |line| {
             try bufferUtil.prepareLineBuffer(allocator, line, width, .New);
         }
     }

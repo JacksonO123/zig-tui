@@ -322,14 +322,14 @@ pub fn setElementDimensions(
 
                         if (index + 1 < layoutInfo.elements.len) {
                             elInfo.width += element.styles.styles.gap;
-                            possibleFillWidth -= element.styles.styles.gap;
+                            possibleFillWidth -|= element.styles.styles.gap;
                         }
 
                         if (layoutConstraint) |cons| {
                             if (cons.width == .Fill) {
                                 try fillWidthIndices.append(allocator, index);
                             } else {
-                                possibleFillWidth -= el.layoutInfo.width;
+                                possibleFillWidth -|= el.layoutInfo.width;
                             }
                         } else {
                             possibleFillWidth -|= el.layoutInfo.width;

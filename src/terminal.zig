@@ -1,8 +1,9 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const contextMod = @import("context.zig");
 const logMod = @import("logger.zig");
+
+const globalState = &@import("global.zig").globalState;
 
 pub fn Terminal(comptime ModelType: type) type {
     return struct {
@@ -10,11 +11,13 @@ pub fn Terminal(comptime ModelType: type) type {
 
         renderAlloc: Allocator,
         gpa: Allocator,
+        io: std.Io,
         model: *ModelType,
         logger: *logMod.Logger,
 
         pub fn init(
             allocator: Allocator,
+            io: std.Io,
             model: *ModelType,
             gpa: Allocator,
             logger: *logMod.Logger,
@@ -22,17 +25,17 @@ pub fn Terminal(comptime ModelType: type) type {
             return .{
                 .renderAlloc = allocator,
                 .gpa = gpa,
+                .io = io,
                 .model = model,
                 .logger = logger,
             };
         }
 
-        pub fn stateChanged(_: *Self) void {
-            if (contextMod.globalState.rendering) {
-                contextMod.globalState.needsRerender = true;
+        pub fn stateChanged(self: *Self) void {
+            if (globalState.rendering) {
+                globalState.needsRerender = true;
             } else {
-                const terminalEvent = contextMod.globalState.terminalEvent orelse return;
-                terminalEvent.set();
+                globalState.eventUtil.event.set(self.io);
             }
         }
     };

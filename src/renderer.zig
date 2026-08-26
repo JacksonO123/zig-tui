@@ -6,9 +6,11 @@ const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const sequences = @import("sequences.zig");
 const stylesMod = @import("styles.zig");
-const ui = @import("ui.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
+const ui = @import("ui.zig");
+
+const globalState = &@import("global.zig").globalState;
 
 pub fn RenderUIFn(comptime ModelType: type) type {
     return fn (*termMod.Terminal(ModelType)) anyerror!*ui.UIElement;
@@ -22,10 +24,10 @@ pub fn handleRender(
     writer: *Writer,
 ) !void {
     renderContext.terminalUtils.prepareForReRender();
-    contextMod.globalState.rendering = true;
+    globalState.rendering = true;
     const el = try renderUI(renderContext.terminal);
     try render(gpa, @ptrCast(renderContext), el, writer);
-    contextMod.globalState.rendering = false;
+    globalState.rendering = false;
 }
 
 pub fn render(
@@ -95,7 +97,7 @@ fn writeDiff(
     const frontBufferLines = context.frontBuffer.buffer.items[0..context.frontBuffer.lineLimit];
     const backBufferLines = context.backBuffer.buffer.items[0..context.backBuffer.lineLimit];
     const rightPadding = terminalUtils.calculateRightPadding(context.config);
-    for (frontBufferLines, backBufferLines, 0..) |*frontLine, *backLine, rowIndex| {
+    for (frontBufferLines, backBufferLines, 0..) |frontLine, backLine, rowIndex| {
         for (frontLine.items, backLine.items, 0..) |frontCell, backCell, cellIndex| {
             if (cellIndex >= size.width - rightPadding) break;
 

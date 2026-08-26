@@ -34,7 +34,7 @@ pub const BufferChar = struct {
 
 pub const BufferLine = std.ArrayList(BufferChar);
 
-pub const CharBuffer = std.ArrayList(BufferLine);
+pub const CharBuffer = std.ArrayList(*BufferLine);
 
 pub fn ensureBufferCapacity(
     allocator: Allocator,
@@ -52,8 +52,9 @@ pub fn ensureBufferCapacity(
     @memset(buf.items[prevLen..], .{ .data = .{ .bytes = "    ".*, .len = 1 } });
 }
 
-pub fn createLine(allocator: Allocator, size: usize) !BufferLine {
-    var line = try BufferLine.initCapacity(allocator, size);
+pub fn createLine(allocator: Allocator, size: usize) !*BufferLine {
+    const line = try allocator.create(BufferLine);
+    line.* = try BufferLine.initCapacity(allocator, size);
     line.items.len = size;
     @memset(line.items, .{ .data = .{ .bytes = "    ".*, .len = 1 } });
     return line;

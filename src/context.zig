@@ -16,18 +16,6 @@ pub const debugConfig = .{
     // .setBehavior = false,
 };
 
-pub const GlobalState = struct {
-    eventStatus: struct {
-        resize: bool = false,
-        stateChange: bool = false,
-    } = .{},
-    terminalEvent: ?*std.Io.Event = null,
-    needsRerender: bool = true,
-    rendering: bool = false,
-};
-
-pub var globalState: GlobalState = .{};
-
 pub const RenderState = struct {
     rowOffset: u16 = 1,
     forceFullRender: bool = false,
@@ -44,7 +32,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
         model: *ModelType,
         config: configMod.Config,
         terminal: *terminalMod.Terminal(ModelType),
-        backBuffer: *backBufferMod.BackBuffer,
+        backBuffer: backBufferMod.BackBuffer,
         frontBuffer: frontBufferMod.FrontBuffer,
         terminalUtils: terminalUtils.TerminalUtils,
         state: RenderState,
@@ -61,17 +49,17 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             const logger = try gpa.create(logMod.Logger);
             logger.* = try logMod.Logger.init(io);
 
-            var termUtils = try terminalUtils.TerminalUtils.init(gpa, config, writer);
+            var termUtils = try terminalUtils.TerminalUtils.init(config, logger, writer);
             const terminal = try gpa.create(terminalMod.Terminal(ModelType));
             terminal.* = terminalMod.Terminal(ModelType).init(
                 termUtils.renderArena.allocator(),
+                io,
                 model,
                 gpa,
                 logger,
             );
 
-            const backBuffer = try gpa.create(backBufferMod.BackBuffer);
-            backBuffer.* = try backBufferMod.BackBuffer.init(gpa, termUtils.size);
+            const backBuffer = try backBufferMod.BackBuffer.init(gpa, termUtils.size);
 
             const eventListenersPtr = try gpa.create(EventListenerCollection);
             eventListenersPtr.* = try EventListenerCollection.init(gpa);
@@ -95,9 +83,8 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             writer: *Writer,
         ) void {
             self.backBuffer.deinit(self.gpa);
-            self.gpa.destroy(self.backBuffer);
             self.frontBuffer.deinit(self.gpa);
-            self.terminalUtils.deinit(self.gpa, self.config, writer);
+            self.terminalUtils.deinit(self.config, writer);
             self.eventListeners.deinit();
             self.gpa.destroy(self.eventListeners);
             self.gpa.destroy(self.logger);
