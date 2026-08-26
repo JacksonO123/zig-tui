@@ -16,14 +16,6 @@ pub const debugConfig = .{
     // .setBehavior = false,
 };
 
-pub const GlobalState = struct {
-    writeFds: terminalUtils.WriteFds,
-    needsRerender: bool = true,
-    rendering: bool = false,
-};
-
-pub var globalState: GlobalState = .{ .writeFds = undefined };
-
 pub const RenderState = struct {
     rowOffset: u16 = 1,
     forceFullRender: bool = false,
@@ -57,14 +49,17 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             const logger = try gpa.create(logMod.Logger);
             logger.* = try logMod.Logger.init(io);
 
-            var termUtils = try terminalUtils.TerminalUtils.init(config, writer);
+            var termUtils = try terminalUtils.TerminalUtils.init(config, logger, writer);
             const terminal = try gpa.create(terminalMod.Terminal(ModelType));
             terminal.* = terminalMod.Terminal(ModelType).init(
                 termUtils.renderArena.allocator(),
+                io,
                 model,
                 gpa,
                 logger,
             );
+
+            const backBuffer = try backBufferMod.BackBuffer.init(gpa, termUtils.size);
 
             const eventListenersPtr = try gpa.create(EventListenerCollection);
             eventListenersPtr.* = try EventListenerCollection.init(gpa);
@@ -74,7 +69,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
                 .terminal = terminal,
                 .terminalUtils = termUtils,
                 .config = config,
-                .backBuffer = try backBufferMod.BackBuffer.init(gpa, termUtils.size),
+                .backBuffer = backBuffer,
                 .frontBuffer = .empty,
                 .model = model,
                 .logger = logger,

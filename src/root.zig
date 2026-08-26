@@ -12,6 +12,8 @@ const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 
+const globalState = &@import("global.zig").globalState;
+
 pub const Config = configMod.Config;
 pub const Terminal = termMod.Terminal;
 pub const UIElement = ui.UIElement;
@@ -50,6 +52,7 @@ pub inline fn initTuiLib(
 
 pub fn render(
     comptime ModelType: type,
+    io: std.Io,
     context: *contextMod.RenderContext(
         ModelType,
         eventListeners.formatRegisteredEvents(baseEvents),
@@ -58,11 +61,10 @@ pub fn render(
     writer: *Writer,
 ) !void {
     while (true) {
-        const timeoutMs: i32 = if (contextMod.globalState.needsRerender) 1 else -1;
-        const pollData, const readData = try context.terminalUtils.pollEvents(timeoutMs);
-
-        const neededRerender = contextMod.globalState.needsRerender;
-        contextMod.globalState.needsRerender = false;
+        defer globalState.eventUtil.event.reset();
+        const pollData, const readData = try context.terminalUtils.pollEvents(io);
+        const neededRerender = globalState.needsRerender;
+        globalState.needsRerender = false;
 
         if (pollData.includes(.Resize)) {
             const size = try terminalUtils.getTermSize(context.config);

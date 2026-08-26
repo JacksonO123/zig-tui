@@ -15,12 +15,12 @@ pub const BackBuffer = struct {
     rendering: stylesMod.SimpleDataStyle = .{},
 
     pub inline fn init(
-        allocator: Allocator,
+        gpa: Allocator,
         size: terminalUtils.Size,
     ) !Self {
         var lines: bufferUtil.CharBuffer = .empty;
-        const line = try bufferUtil.createLine(allocator, size.width);
-        try lines.append(allocator, line);
+        const line = try bufferUtil.createLine(gpa, size.width);
+        try lines.append(gpa, line);
 
         return .{
             .buffer = lines,
@@ -33,7 +33,7 @@ pub const BackBuffer = struct {
         allocator: Allocator,
         size: terminalUtils.Size,
     ) !void {
-        for (self.buffer.items) |*line| {
+        for (self.buffer.items) |line| {
             try bufferUtil.prepareLineBuffer(allocator, line, size.width, .All);
         }
 
@@ -41,8 +41,9 @@ pub const BackBuffer = struct {
     }
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
-        for (self.buffer.items) |*line| {
+        for (self.buffer.items) |line| {
             line.deinit(allocator);
+            allocator.destroy(line);
         }
 
         self.buffer.deinit(allocator);
@@ -198,7 +199,7 @@ pub const BackBuffer = struct {
             verticalBorder.data.len = @intCast(borderStyles.vertical.len);
 
             a: {
-                const line = &self.buffer.items[layoutInfo.y];
+                const line = self.buffer.items[layoutInfo.y];
                 if (layoutInfo.width == 0 or layoutInfo.x + 1 >= line.items.len) break :a;
                 const from = layoutInfo.x + 1;
                 const to = @min(
@@ -212,7 +213,7 @@ pub const BackBuffer = struct {
             }
 
             a: {
-                const line = &self.buffer.items[layoutInfo.y + layoutInfo.height - 1];
+                const line = self.buffer.items[layoutInfo.y + layoutInfo.height - 1];
                 if (layoutInfo.width == 0 or layoutInfo.x + 1 >= line.items.len) break :a;
                 const from = layoutInfo.x + 1;
                 const to = @min(

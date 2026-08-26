@@ -45,10 +45,6 @@ pub fn main(init: std.process.Init) !void {
         context.deinit(writer);
         init.gpa.destroy(context);
     }
-    errdefer {
-        context.deinit(writer);
-        init.gpa.destroy(context);
-    }
 
-    try tui.render(Model, context, renderUI, writer);
+    try tui.render(Model, init.io, context, renderUI, writer);
 }
