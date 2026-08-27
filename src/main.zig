@@ -8,28 +8,67 @@ const config: tui.Config = .{};
 pub const Model = struct {
     const Self = @This();
 
-    pub fn init() Self {
-        return .{};
+    counter: u32 = 0,
+    to: u32,
+
+    pub fn init(to: u32) Self {
+        return .{ .to = to };
     }
 };
 
-pub fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
+fn progressBar(allocator: Allocator, percent: f32) !*tui.UIElement {
+    var bar = try tui.Text.fromConstText(allocator, "");
+    _ = bar.styles.bg(if (percent < 0.33) .Red else if (percent < 0.66) .Yellow else .Green);
+
+    var layout = try tui.Layout.fromElementsAndConstraints(
+        allocator,
+        &.{bar},
+        &.{
+            .{
+                .width = .{
+                    .Percent = percent,
+                },
+            },
+        },
+        .Horizontal,
+    );
+    _ = layout.styles.border(.Rounded);
+
+    return layout;
+}
+
+fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
+    if (terminal.model.counter < terminal.model.to) {
+        terminal.model.counter += 1;
+        terminal.stateChanged();
+    }
+
     const allocator = terminal.renderAlloc;
 
-    var text = try tui.Text.fromConstText(allocator, "this is a longer string than is able to be rendered in the box");
-    _ = text.styles.border(.Rounded).wordWrap(true).bg(.Cyan).fg(.Black);
+    const percent: f32 = a: {
+        const floatCounter: f32 = @floatFromInt(terminal.model.counter);
+        const floatTo: f32 = @floatFromInt(terminal.model.to);
+        const res = floatCounter / floatTo;
+        break :a @min(1, res);
+    };
+
+    const fmtString = try std.fmt.allocPrint(allocator, "- Progress: {d}% -", .{@floor(percent * 100)});
+    const text = try tui.Text.fromConstText(allocator, fmtString);
+
+    const bar = try progressBar(allocator, percent);
 
     const layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{text},
+        &.{ text, bar },
         &.{
+            .{},
             .{
                 .width = .{
                     .Fill = {},
                 },
             },
         },
-        .Horizontal,
+        .Vertical,
     );
 
     return layout;
@@ -40,23 +79,12 @@ pub fn main(init: std.process.Init) !void {
     var stdout = std.Io.File.stdout().writer(init.io, &stdoutBuf);
     const writer = &stdout.interface;
 
-    var model = Model.init();
+    var model = Model.init(1000);
     var context = try tui.initTuiLib(Model, init.gpa, init.io, config, &model, writer);
     defer {
         context.deinit(writer);
         init.gpa.destroy(context);
     }
 
-    try context.on("scroll", .{context.terminal}, scrollHandler);
-    try context.on("mouse-btn", .{context.terminal}, mouseBtnHandler);
-
     try tui.render(Model, init.io, context, renderUI, writer);
-}
-
-fn scrollHandler(terminal: *tui.Terminal(Model), event: tui.events.ScrollEvent) void {
-    terminal.logger.logBufPrint(2048, "{any}", .{event}) catch {};
-}
-
-fn mouseBtnHandler(terminal: *tui.Terminal(Model), event: tui.events.MouseEvent) void {
-    terminal.logger.logBufPrint(2048, "{any}", .{event}) catch {};
 }

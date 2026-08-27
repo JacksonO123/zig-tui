@@ -41,11 +41,13 @@ pub const EventData = struct {
 pub const WakeReasonVariants = enum {
     Stdin,
     Update,
+    Skip,
 };
 
 pub const WakeReason = union(WakeReasonVariants) {
     Stdin: std.Io.File.ReadStreamingError!usize,
     Update: std.Io.Cancelable!void,
+    Skip: std.Io.Cancelable!void,
 };
 
 pub fn waitForUpdate(io: std.Io, event: *std.Io.Event) std.Io.Cancelable!void {
@@ -55,6 +57,15 @@ pub fn waitForUpdate(io: std.Io, event: *std.Io.Event) std.Io.Cancelable!void {
 pub fn waitForStdin(io: std.Io, buf: []u8) std.Io.File.ReadStreamingError!usize {
     var buffers = [1][]u8{buf};
     return std.Io.File.stdin().readStreaming(io, &buffers);
+}
+
+pub fn waitForSkip(io: std.Io, allowSkip: bool) !void {
+    if (allowSkip) {
+        try std.Io.sleep(io, .fromMilliseconds(1), .awake);
+    } else {
+        var event: std.Io.Event = .unset;
+        try event.wait(io);
+    }
 }
 
 pub const TerminalUtils = struct {
@@ -110,17 +121,18 @@ pub const TerminalUtils = struct {
         globalState.eventUtil.event.set(threadedIo.io());
     }
 
-    pub fn pollEvents(self: *Self, io: std.Io) !struct { EventData, []const u8 } {
+    pub fn pollEvents(self: *Self, io: std.Io, allowSkip: bool) !struct { EventData, []const u8 } {
         _ = self.eventArena.reset(.retain_capacity);
         const allocator = self.eventArena.allocator();
 
         var stdinBuf: [4096]u8 = undefined;
 
-        var results: [2]WakeReason = undefined;
+        var results: [3]WakeReason = undefined;
         var select = std.Io.Select(WakeReason).init(io, &results);
 
         select.async(.Update, waitForUpdate, .{ io, &globalState.eventUtil.event });
         select.async(.Stdin, waitForStdin, .{ io, &stdinBuf });
+        select.async(.Skip, waitForSkip, .{ io, allowSkip });
 
         const result = try select.await();
         _ = select.cancel();
@@ -150,6 +162,10 @@ pub const TerminalUtils = struct {
                     globalState.eventUtil.flags.stateChange = false;
                     eventData.append(.StateChange);
                 }
+            },
+            .Skip => |valid| {
+                _ = try valid;
+                eventData.append(.StateChange);
             },
         }
 

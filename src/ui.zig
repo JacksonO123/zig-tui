@@ -293,18 +293,21 @@ pub fn setElementDimensions(
 
                     for (layoutInfo.elements, 0..) |el, index| {
                         const layoutConstraint = layoutInfo.getConstraint(index);
-                        const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons|
-                            .{
-                                getSizeConstraint(
-                                    sizeConstraint,
-                                    cons,
-                                    null,
-                                    null,
-                                ),
+                        const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
+                            var newConstraint = getSizeConstraint(
+                                sizeConstraint,
                                 cons,
-                            }
-                        else
-                            .{ sizeConstraint, constraint };
+                                null,
+                                null,
+                            );
+                            newConstraint.width -|= preAdjust.width + postAdjust.width;
+                            newConstraint.height -|= preAdjust.height + postAdjust.height;
+
+                            break :a .{
+                                newConstraint,
+                                cons,
+                            };
+                        } else .{ sizeConstraint, constraint };
 
                         const innerElPos = utils.Pos{
                             .x = elInfo.x + preAdjust.width + elInfo.width,
@@ -400,18 +403,21 @@ pub fn setElementDimensions(
 
                     for (layoutInfo.elements, 0..) |el, index| {
                         const layoutConstraint = layoutInfo.getConstraint(index);
-                        const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons|
-                            .{
-                                getSizeConstraint(
-                                    sizeConstraint,
-                                    cons,
-                                    null,
-                                    null,
-                                ),
+                        const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
+                            var newConstraint = getSizeConstraint(
+                                sizeConstraint,
                                 cons,
-                            }
-                        else
-                            .{ sizeConstraint, constraint };
+                                null,
+                                null,
+                            );
+                            newConstraint.width -|= preAdjust.width + postAdjust.width;
+                            newConstraint.height -|= preAdjust.height + postAdjust.height;
+
+                            break :a .{
+                                newConstraint,
+                                cons,
+                            };
+                        } else .{ sizeConstraint, constraint };
 
                         const innerElPos = utils.Pos{
                             .x = elInfo.x + preAdjust.width,

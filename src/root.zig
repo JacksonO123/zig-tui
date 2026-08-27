@@ -66,7 +66,10 @@ pub fn render(
 ) !void {
     while (true) {
         defer globalState.eventUtil.event.reset();
-        const pollData, var readData = try context.terminalUtils.pollEvents(io);
+        const pollData, var readData = try context.terminalUtils.pollEvents(
+            io,
+            globalState.needsRerender,
+        );
         const neededRerender = globalState.needsRerender;
         globalState.needsRerender = false;
 
@@ -117,6 +120,7 @@ pub fn render(
                 }
 
                 try context.emit("stdin", .{readData});
+                readData = &.{};
             }
         }
     }
