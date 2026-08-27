@@ -9,6 +9,7 @@ const stylesMod = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
 const ui = @import("ui.zig");
+const utils = @import("utils.zig");
 
 const globalState = &@import("global.zig").globalState;
 
@@ -88,7 +89,7 @@ pub fn render(
 fn writeDiff(
     allocator: Allocator,
     context: *contextMod.RenderContext(anyopaque, void),
-    size: terminalUtils.Size,
+    size: utils.Size,
     writer: *Writer,
 ) !void {
     try context.frontBuffer.matchSize(allocator, context.backBuffer.lineLimit, size.width);

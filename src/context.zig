@@ -10,6 +10,7 @@ const logMod = @import("logger.zig");
 const sequences = @import("sequences.zig");
 const terminalMod = @import("terminal.zig");
 const terminalUtils = @import("terminal_utils.zig");
+const utils = @import("utils.zig");
 
 pub const debugConfig = .{
     .setBehavior = true,
@@ -19,7 +20,7 @@ pub const debugConfig = .{
 pub const RenderState = struct {
     rowOffset: u16 = 1,
     forceFullRender: bool = false,
-    size: terminalUtils.Size = .{},
+    size: utils.Size = .{},
 };
 
 pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) type {

@@ -228,3 +228,13 @@ pub fn simulateNewline(
 pub fn requestCursorPosition(writer: *Writer) !void {
     try writer.writeAll(codes.requestCursorPosition);
 }
+
+pub fn enableMouseReporting(writer: *Writer) !void {
+    try writer.writeAll("\x1b[?1000h");
+    try writer.writeAll("\x1b[?1006h");
+}
+
+pub fn disableMouseReporting(writer: *Writer) !void {
+    try writer.writeAll("\x1b[?1000l");
+    try writer.writeAll("\x1b[?1006l");
+}

@@ -7,6 +7,8 @@ const c = @import("c");
 const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
 const eventListeners = @import("events/event_listeners.zig");
+const eventTypes = @import("events/event_types.zig");
+const eventUtils = @import("events/event_utils.zig");
 const renderer = @import("renderer.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
@@ -23,7 +25,9 @@ pub const RenderContext = contextMod.RenderContext;
 pub const events = @import("events/event_exports.zig");
 
 pub const baseEvents: []const eventListeners.EventDescription = &.{
-    .{ .name = "stdin", .args = events.StdinEvent },
+    .{ .name = "stdin", .args = eventTypes.StdinEvent },
+    .{ .name = "scroll", .args = eventTypes.ScrollEventWrapper },
+    .{ .name = "mouse-btn", .args = eventTypes.MouseEventWrapper },
 };
 
 pub inline fn initTuiLib(
@@ -62,7 +66,7 @@ pub fn render(
 ) !void {
     while (true) {
         defer globalState.eventUtil.event.reset();
-        const pollData, const readData = try context.terminalUtils.pollEvents(io);
+        const pollData, var readData = try context.terminalUtils.pollEvents(io);
         const neededRerender = globalState.needsRerender;
         globalState.needsRerender = false;
 
@@ -78,14 +82,42 @@ pub fn render(
 
         if (pollData.includes(.Stdin)) {
             if (readData.len == 0) continue;
-            for (readData) |byte| {
-                switch (byte) {
-                    'q', 0x03 => return,
-                    else => {},
-                }
-            }
 
-            try context.emit("stdin", .{readData});
+            while (readData.len > 0) {
+                if (eventUtils.handleMouseEvent(readData)) |eventData| {
+                    switch (eventData.event.button) {
+                        64, 65 => {
+                            const direction: eventTypes.ScrollDirection = switch (eventData.event.button) {
+                                64 => .Up,
+                                65 => .Down,
+                                else => unreachable,
+                            };
+                            const scrollEvent = eventTypes.ScrollEvent{
+                                .direction = direction,
+                                .pos = .{
+                                    .x = eventData.event.x,
+                                    .y = eventData.event.y,
+                                },
+                            };
+                            try context.emit("scroll", .{scrollEvent});
+                        },
+                        else => {
+                            try context.emit("mouse-btn", .{eventData.event});
+                        },
+                    }
+
+                    readData = readData[eventData.len..];
+                }
+
+                for (readData) |byte| {
+                    switch (byte) {
+                        'q', 0x03 => return,
+                        else => {},
+                    }
+                }
+
+                try context.emit("stdin", .{readData});
+            }
         }
     }
 }

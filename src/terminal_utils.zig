@@ -8,20 +8,11 @@ const contextMod = @import("context.zig");
 const logMod = @import("logger.zig");
 const sequences = @import("sequences.zig");
 const types = @import("types.zig");
+const utils = @import("utils.zig");
 
 const globalState = &@import("global.zig").globalState;
 
-pub const Size = struct {
-    height: u16 = 0,
-    width: u16 = 0,
-};
-
-pub const Pos = struct {
-    x: u16 = 0,
-    y: u16 = 0,
-};
-
-var savedTermios: ?std.posix.termios = null;
+var terminalState: ?std.posix.termios = null;
 
 const PollEvents = enum(u8) {
     Resize = 0b1,
@@ -69,7 +60,7 @@ pub fn waitForStdin(io: std.Io, buf: []u8) std.Io.File.ReadStreamingError!usize 
 pub const TerminalUtils = struct {
     const Self = @This();
 
-    size: Size,
+    size: utils.Size,
     logger: *logMod.Logger,
     eventArena: std.heap.ArenaAllocator,
     renderArena: std.heap.ArenaAllocator,
@@ -104,14 +95,12 @@ pub const TerminalUtils = struct {
     }
 
     fn initResizeEvent() void {
-        if (builtin.os.tag != .windows) {
-            var action: std.posix.Sigaction = .{
-                .handler = .{ .handler = sigWinchHandler },
-                .mask = std.posix.sigemptyset(),
-                .flags = 0,
-            };
-            std.posix.sigaction(std.posix.SIG.WINCH, &action, null);
-        }
+        var action: std.posix.Sigaction = .{
+            .handler = .{ .handler = sigWinchHandler },
+            .mask = std.posix.sigemptyset(),
+            .flags = 0,
+        };
+        std.posix.sigaction(std.posix.SIG.WINCH, &action, null);
     }
 
     fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
@@ -171,7 +160,7 @@ pub const TerminalUtils = struct {
         self: *Self,
         config: configMod.Config,
         state: *contextMod.RenderState,
-        size: Size,
+        size: utils.Size,
     ) void {
         self.size = size;
         if (config.screenType == .Main and size.height < state.rowOffset) {
@@ -186,9 +175,10 @@ pub const TerminalUtils = struct {
 };
 
 pub fn enableRawMode() !void {
-    const fd = std.Io.File.stdin().handle;
-    const original = try std.posix.tcgetattr(fd);
-    savedTermios = original;
+    const stdoutHandle = std.Io.File.stdout().handle;
+
+    const original = try std.posix.tcgetattr(stdoutHandle);
+    terminalState = original;
 
     var raw = original;
     raw.iflag.BRKINT = false;
@@ -207,43 +197,36 @@ pub fn enableRawMode() !void {
     raw.cc[@intFromEnum(std.posix.V.MIN)] = 1;
     raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
 
-    try std.posix.tcsetattr(fd, .FLUSH, raw);
+    try std.posix.tcsetattr(stdoutHandle, .FLUSH, raw);
 }
 
 pub fn disableRawMode() void {
-    const orig = savedTermios orelse return;
-    const fd = std.Io.File.stdin().handle;
-    std.posix.tcsetattr(fd, .FLUSH, orig) catch {};
-    savedTermios = null;
+    const stdinHandle = std.Io.File.stdin().handle;
+
+    const orig = terminalState orelse return;
+    std.posix.tcsetattr(stdinHandle, .FLUSH, orig) catch {};
+
+    terminalState = null;
 }
 
-pub fn getTermSize(config: configMod.Config) !Size {
-    const stdoutHandle = std.Io.File.stdout().handle;
-    var row: u16 = 0;
-    var col: u16 = 0;
-
-    if (builtin.os.tag == .windows) {
-        var info: std.os.windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
-        if (std.os.windows.kernel32.GetConsoleScreenBufferInfo(stdoutHandle, &info) == 0) {
-            return error.GetConsoleInfoFailed;
-        }
-
-        row = @intCast(info.srWindow.Bottom - info.srWindow.Top + 1);
-        col = @intCast(info.srWindow.Right - info.srWindow.Left + 1);
-    } else {
-        var winSize: std.posix.winsize = undefined;
-        const fd = std.Io.File.stdout().handle;
-        const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winSize));
-        if (std.posix.errno(err) != .SUCCESS) {
-            return error.IoctlFailed;
-        }
-        row = winSize.row;
-        col = winSize.col;
+pub fn getTermSize(config: configMod.Config) !utils.Size {
+    var winSize: std.posix.winsize = undefined;
+    const fd = std.Io.File.stdout().handle;
+    const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winSize));
+    if (std.posix.errno(err) != .SUCCESS) {
+        return error.FailedToGetTerminalSize;
     }
 
+    return processTerminalSize(config, .{
+        .width = winSize.col,
+        .height = winSize.row,
+    });
+}
+
+fn processTerminalSize(config: configMod.Config, size: utils.Size) utils.Size {
     return .{
-        .height = row - @as(u8, if (config.screenType == .Main) 1 else 0),
-        .width = col,
+        .width = size.width,
+        .height = size.height -| @as(u8, if (config.screenType == .Main) 1 else 0),
     };
 }
 
@@ -262,6 +245,10 @@ fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
     if (config.screenType == .Main) {
         try sequences.disableAutoWrap(writer);
     }
+
+    try sequences.enableMouseReporting(writer);
+
+    try writer.flush();
 }
 
 fn deinitTermBehavior(config: configMod.Config, writer: *Writer) !void {
@@ -275,6 +262,8 @@ fn deinitTermBehavior(config: configMod.Config, writer: *Writer) !void {
     if (config.screenType == .Alternate) {
         try sequences.disableAlternateScreen(writer);
     }
+
+    try sequences.disableMouseReporting(writer);
 
     try writer.flush();
 }

@@ -5,6 +5,7 @@ const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
+const utils = @import("utils.zig");
 
 pub const ElementLayoutInfo = struct {
     width: u16 = 0,
@@ -162,9 +163,9 @@ pub fn setElementDimensions(
     allocator: Allocator,
     context: *RenderContext(anyopaque, void),
     element: *UIElement,
-    sizeConstraint: terminalUtils.Size,
+    sizeConstraint: utils.Size,
     constraint: Constraint,
-    writePos: terminalUtils.Pos,
+    writePos: utils.Pos,
 ) !void {
     var elInfo: ElementLayoutInfo = .{
         .x = writePos.x,
@@ -305,7 +306,7 @@ pub fn setElementDimensions(
                         else
                             .{ sizeConstraint, constraint };
 
-                        const innerElPos = terminalUtils.Pos{
+                        const innerElPos = utils.Pos{
                             .x = elInfo.x + preAdjust.width + elInfo.width,
                             .y = elInfo.y + preAdjust.height,
                         };
@@ -412,7 +413,7 @@ pub fn setElementDimensions(
                         else
                             .{ sizeConstraint, constraint };
 
-                        const innerElPos = terminalUtils.Pos{
+                        const innerElPos = utils.Pos{
                             .x = elInfo.x + preAdjust.width,
                             .y = elInfo.y + preAdjust.height + elInfo.height,
                         };
@@ -519,11 +520,11 @@ fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u16, fillSiz
 }
 
 fn getSizeConstraint(
-    currentSize: terminalUtils.Size,
+    currentSize: utils.Size,
     constraint: Constraint,
     fillWidthPerEl: ?u16,
     fillHeightPerEl: ?u16,
-) terminalUtils.Size {
+) utils.Size {
     var sizeCpy = currentSize;
 
     sizeCpy.width = applySizeConstraint(constraint.width, sizeCpy.width, fillWidthPerEl);
@@ -532,8 +533,8 @@ fn getSizeConstraint(
     return sizeCpy;
 }
 
-pub fn getPreAdjustment(styles: stylesMod.Styles) terminalUtils.Size {
-    var adjustment: terminalUtils.Size = .{};
+pub fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {
+    var adjustment: utils.Size = .{};
 
     if (styles.hasBorder()) {
         adjustment.width += 1;
@@ -546,8 +547,8 @@ pub fn getPreAdjustment(styles: stylesMod.Styles) terminalUtils.Size {
     return adjustment;
 }
 
-pub fn getPostAdjustment(styles: stylesMod.Styles) terminalUtils.Size {
-    var adjustment: terminalUtils.Size = .{};
+pub fn getPostAdjustment(styles: stylesMod.Styles) utils.Size {
+    var adjustment: utils.Size = .{};
 
     if (styles.hasBorder()) {
         adjustment.width += 1;

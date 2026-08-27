@@ -24,8 +24,9 @@ pub fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
         &.{text},
         &.{
             .{
-                .width = .{ .Min = 100 },
-                .height = .{ .Min = 30 },
+                .width = .{
+                    .Fill = {},
+                },
             },
         },
         .Horizontal,
@@ -46,5 +47,16 @@ pub fn main(init: std.process.Init) !void {
         init.gpa.destroy(context);
     }
 
+    try context.on("scroll", .{context.terminal}, scrollHandler);
+    try context.on("mouse-btn", .{context.terminal}, mouseBtnHandler);
+
     try tui.render(Model, init.io, context, renderUI, writer);
+}
+
+fn scrollHandler(terminal: *tui.Terminal(Model), event: tui.events.ScrollEvent) void {
+    terminal.logger.logBufPrint(2048, "{any}", .{event}) catch {};
+}
+
+fn mouseBtnHandler(terminal: *tui.Terminal(Model), event: tui.events.MouseEvent) void {
+    terminal.logger.logBufPrint(2048, "{any}", .{event}) catch {};
 }

@@ -44,7 +44,10 @@ pub const Logger = struct {
     }
 
     fn initLogFile(io: std.Io) !std.Io.File {
-        return try std.Io.Dir.cwd().createFile(io, LOG_FILE_NAME, .{ .truncate = false });
+        return try std.Io.Dir.cwd().createFile(io, LOG_FILE_NAME, .{
+            .truncate = false,
+            .read = true,
+        });
     }
 
     pub fn logBufPrint(
