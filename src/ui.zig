@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const components = @import("components.zig");
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
@@ -14,14 +15,9 @@ pub const ElementLayoutInfo = struct {
     y: u16 = 0,
 };
 
-pub const UIElementTypes = enum {
-    Text,
-    Layout,
-};
-
-pub const UIElementVariant = union(UIElementTypes) {
-    Text: Text,
-    Layout: Layout,
+pub const UIElementVariant = union(enum) {
+    Text: components.Text,
+    Layout: components.Layout,
 };
 
 pub const UIElement = struct {
@@ -30,6 +26,7 @@ pub const UIElement = struct {
     layoutInfo: ElementLayoutInfo = .{},
     styles: stylesMod.Styles = .default,
     variant: UIElementVariant,
+    id: ?[]const u8 = null,
 
     pub fn fromVariant(variant: UIElementVariant) Self {
         return .{ .variant = variant };
@@ -39,24 +36,6 @@ pub const UIElement = struct {
         const ptr = try allocator.create(Self);
         ptr.* = self;
         return ptr;
-    }
-};
-
-pub const Text = struct {
-    const Self = @This();
-
-    data: []const u8,
-    /// do not rely on this ptr
-    renderedData: [][]u8,
-
-    pub fn fromConstText(allocator: Allocator, str: []const u8) !*UIElement {
-        const el = UIElement.fromVariant(.{
-            .Text = .{
-                .data = str,
-                .renderedData = &.{},
-            },
-        });
-        return el.alloc(allocator);
     }
 };
 
@@ -83,81 +62,10 @@ const ConstraintValues = union(ConstraintTypes) {
     Fill,
 };
 
-const Constraint = struct {
+pub const Constraint = struct {
     width: ConstraintValues = .None,
     height: ConstraintValues = .None,
 };
-
-const LayoutTypes = enum {
-    Vertical,
-    Horizontal,
-};
-
-const LayoutUtil = struct {
-    const Self = @This();
-
-    elements: []const *UIElement,
-    constraints: []Constraint,
-
-    pub fn getConstraint(self: Self, index: usize) ?Constraint {
-        if (index < self.constraints.len) {
-            return self.constraints[index];
-        }
-
-        return null;
-    }
-};
-
-pub const Layout = union(LayoutTypes) {
-    const Self = @This();
-
-    Vertical: LayoutUtil,
-    Horizontal: LayoutUtil,
-
-    pub fn fromElements(
-        allocator: Allocator,
-        elements: []const *UIElement,
-        direction: LayoutTypes,
-    ) !*UIElement {
-        return fromElementsAndConstraints(allocator, elements, &.{}, direction);
-    }
-
-    pub fn fromElementsAndConstraints(
-        allocator: Allocator,
-        elements: []const *UIElement,
-        constraints: []const Constraint,
-        direction: LayoutTypes,
-    ) !*UIElement {
-        const elementSlice = try allocator.dupe(*UIElement, elements);
-        const constraintSlice = try allocator.dupe(Constraint, constraints);
-
-        const layout: Self = switch (direction) {
-            .Vertical => .{
-                .Vertical = .{
-                    .elements = elementSlice,
-                    .constraints = constraintSlice,
-                },
-            },
-            .Horizontal => .{
-                .Horizontal = .{
-                    .elements = elementSlice,
-                    .constraints = constraintSlice,
-                },
-            },
-        };
-        const el = UIElement.fromVariant(.{ .Layout = layout });
-        return el.alloc(allocator);
-    }
-
-    pub fn getConstraint(self: Self, index: usize) ?Constraint {
-        return switch (self) {
-            .Horizontal => |layout| layout.getConstraint(index),
-            .Vertical => |layout| layout.getConstraint(index),
-        };
-    }
-};
-
-var logged = false;
 
 pub fn setElementDimensions(
     allocator: Allocator,
@@ -310,7 +218,7 @@ pub fn setElementDimensions(
                         } else .{ sizeConstraint, constraint };
 
                         const innerElPos = utils.Pos{
-                            .x = elInfo.x + preAdjust.width + elInfo.width,
+                            .x = elInfo.x + preAdjust.width + (elInfo.width - preAdjust.width - postAdjust.width),
                             .y = elInfo.y + preAdjust.height,
                         };
                         try setElementDimensions(

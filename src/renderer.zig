@@ -156,12 +156,12 @@ pub fn matchRenderStyle(
         writer,
     );
 
-    if (rendering.fg != styles.fg) {
+    if (std.meta.activeTag(rendering.fg) != std.meta.activeTag(styles.fg)) {
         try sequences.setFgFromColor(styles.fg, writer);
         rendering.fg = styles.fg;
     }
 
-    if (rendering.bg != styles.bg) {
+    if (std.meta.activeTag(rendering.bg) != std.meta.activeTag(styles.bg)) {
         try sequences.setBgFromColor(styles.bg, writer);
         rendering.bg = styles.bg;
     }

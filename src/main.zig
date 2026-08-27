@@ -11,14 +11,24 @@ pub const Model = struct {
     counter: u32 = 0,
     to: u32,
 
+    inputValue: []const u8 = &.{},
+
     pub fn init(to: u32) Self {
         return .{ .to = to };
+    }
+
+    pub fn deinit(self: Self, allocator: Allocator) void {
+        allocator.free(self.inputValue);
     }
 };
 
 fn progressBar(allocator: Allocator, percent: f32) !*tui.UIElement {
+    const green = tui.RgbColor.from(0, 232, 93);
+    const red = tui.RgbColor.from(214, 65, 60);
+    const barColor = red.lerp(green, percent);
+
     var bar = try tui.Text.fromConstText(allocator, "");
-    _ = bar.styles.bg(if (percent < 0.33) .Red else if (percent < 0.66) .Yellow else .Green);
+    _ = bar.styles.bg(.{ .Custom = barColor });
 
     var layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
@@ -57,9 +67,18 @@ fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
 
     const bar = try progressBar(allocator, percent);
 
+    var input = try tui.Input.fromValueAndPlaceholder(
+        allocator,
+        "input",
+        terminal.model.inputValue,
+        "Enter some text",
+        true,
+    );
+    _ = input.styles.border(.Rounded);
+
     const layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{ text, bar },
+        &.{ text, bar, input },
         &.{
             .{},
             .{
@@ -82,9 +101,24 @@ pub fn main(init: std.process.Init) !void {
     var model = Model.init(1000);
     var context = try tui.initTuiLib(Model, init.gpa, init.io, config, &model, writer);
     defer {
+        model.deinit(init.gpa);
         context.deinit(writer);
         init.gpa.destroy(context);
     }
 
+    try context.on("stdin", .{context.terminal}, stdinHandler);
+
     try tui.render(Model, init.io, context, renderUI, writer);
+}
+
+fn stdinHandler(terminal: *tui.Terminal(Model), data: []const u8) !void {
+    const newStr = if (data[0] == tui.keys.Backspace)
+        try terminal.gpa.dupe(u8, terminal.model.inputValue[0..terminal.model.inputValue.len -| 1])
+    else
+        try std.fmt.allocPrint(terminal.gpa, "{s}{s}", .{ terminal.model.inputValue, data });
+
+    terminal.gpa.free(terminal.model.inputValue);
+    terminal.model.inputValue = newStr;
+
+    terminal.stateChanged();
 }

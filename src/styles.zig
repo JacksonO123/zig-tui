@@ -1,3 +1,5 @@
+const utils = @import("utils.zig");
+
 const BorderCornerChars = struct {
     topLeft: []const u8,
     topRight: []const u8,
@@ -60,7 +62,26 @@ const ActiveState = enum {
     None,
 };
 
-pub const Color = enum {
+pub const RgbColor = struct {
+    const Self = @This();
+
+    r: u8,
+    g: u8,
+    b: u8,
+
+    pub fn from(r: u8, g: u8, b: u8) Self {
+        return .{ .r = r, .g = g, .b = b };
+    }
+
+    pub fn lerp(self: Self, other: Self, t: f64) Self {
+        const r: u8 = @intCast(utils.lerp(@intCast(self.r), @intCast(other.r), t));
+        const g: u8 = @intCast(utils.lerp(@intCast(self.g), @intCast(other.g), t));
+        const b: u8 = @intCast(utils.lerp(@intCast(self.b), @intCast(other.b), t));
+        return from(r, g, b);
+    }
+};
+
+pub const Color = union(enum) {
     const Self = @This();
 
     Black,
@@ -72,6 +93,7 @@ pub const Color = enum {
     Cyan,
     White,
     None,
+    Custom: RgbColor,
 };
 
 pub const StyleConfig = struct {

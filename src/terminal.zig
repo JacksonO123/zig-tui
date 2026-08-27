@@ -35,6 +35,7 @@ pub fn Terminal(comptime ModelType: type) type {
             if (globalState.rendering) {
                 globalState.needsRerender = true;
             } else {
+                globalState.eventUtil.flags.stateChange = true;
                 globalState.eventUtil.event.set(self.io);
             }
         }

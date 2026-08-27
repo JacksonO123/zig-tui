@@ -4,25 +4,32 @@ const Allocator = std.mem.Allocator;
 
 const c = @import("c");
 
+const components = @import("components.zig");
 const configMod = @import("config.zig");
+const constants = @import("constants.zig");
 const contextMod = @import("context.zig");
 const eventListeners = @import("events/event_listeners.zig");
 const eventTypes = @import("events/event_types.zig");
 const eventUtils = @import("events/event_utils.zig");
 const renderer = @import("renderer.zig");
+const styles = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 
-const globalState = &@import("global.zig").globalState;
-
+// exports
+pub const events = @import("events/event_exports.zig");
+pub const Text = components.Text;
+pub const Layout = components.Layout;
 pub const Config = configMod.Config;
+pub const RenderContext = contextMod.RenderContext;
 pub const Terminal = termMod.Terminal;
 pub const UIElement = ui.UIElement;
-pub const Text = ui.Text;
-pub const Layout = ui.Layout;
-pub const RenderContext = contextMod.RenderContext;
-pub const events = @import("events/event_exports.zig");
+pub const Input = components.Input;
+pub const keys = constants.keys;
+pub const RgbColor = styles.RgbColor;
+
+const globalState = &@import("global.zig").globalState;
 
 pub const baseEvents: []const eventListeners.EventDescription = &.{
     .{ .name = "stdin", .args = eventTypes.StdinEvent },
@@ -65,7 +72,13 @@ pub fn render(
     writer: *Writer,
 ) !void {
     while (true) {
-        defer globalState.eventUtil.event.reset();
+        var allow = true;
+        defer {
+            if (allow) {
+                globalState.eventUtil.event.reset();
+            }
+        }
+
         const pollData, var readData = try context.terminalUtils.pollEvents(
             io,
             globalState.needsRerender,
@@ -84,6 +97,8 @@ pub fn render(
         }
 
         if (pollData.includes(.Stdin)) {
+            allow = false;
+
             if (readData.len == 0) continue;
 
             while (readData.len > 0) {
@@ -112,9 +127,15 @@ pub fn render(
                     readData = readData[eventData.len..];
                 }
 
+                if (readData.len == 0) break;
+
                 for (readData) |byte| {
                     switch (byte) {
-                        'q', 0x03 => return,
+                        // ctrl c
+                        3,
+                        // esc
+                        27,
+                        => return,
                         else => {},
                     }
                 }

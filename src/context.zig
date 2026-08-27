@@ -20,7 +20,7 @@ pub const debugConfig = .{
 pub const RenderState = struct {
     rowOffset: u16 = 1,
     forceFullRender: bool = false,
-    size: utils.Size = .{},
+    focusedId: ?[]const u8 = null,
 };
 
 pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) type {

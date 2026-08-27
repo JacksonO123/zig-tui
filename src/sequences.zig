@@ -172,6 +172,11 @@ pub fn setFgFromColor(color: stylesMod.Color, writer: *Writer) !void {
         .Cyan => "\x1b[36m",
         .White => "\x1b[37m",
         .None => "\x1b[39m",
+        .Custom => |rgb| a: {
+            var buf: [32]u8 = undefined;
+            const str = try std.fmt.bufPrint(&buf, "\x1b[38;2;{d};{d};{d}m", .{ rgb.r, rgb.g, rgb.b });
+            break :a str;
+        },
     };
     try writer.writeAll(code);
 }
@@ -187,6 +192,11 @@ pub fn setBgFromColor(color: stylesMod.Color, writer: *Writer) !void {
         .Cyan => "\x1b[46m",
         .White => "\x1b[47m",
         .None => "\x1b[49m",
+        .Custom => |rgb| a: {
+            var buf: [32]u8 = undefined;
+            const str = try std.fmt.bufPrint(&buf, "\x1b[48;2;{d};{d};{d}m", .{ rgb.r, rgb.g, rgb.b });
+            break :a str;
+        },
     };
     try writer.writeAll(code);
 }
