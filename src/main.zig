@@ -3,9 +3,7 @@ const Allocator = std.mem.Allocator;
 
 const tui = @import("zig_tui");
 
-const config: tui.Config = .{
-    .screenType = .Main,
-};
+const config: tui.Config = .{};
 
 pub const Model = struct {
     const Self = @This();
@@ -36,13 +34,11 @@ fn progressBar(allocator: Allocator, percent: f32) !*tui.UIElement {
     var layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
         &.{bar},
-        &.{
-            .{
-                .width = .{
-                    .Percent = percent,
-                },
+        &.{.{
+            .width = .{
+                .Percent = percent,
             },
-        },
+        }},
         .Horizontal,
     );
     _ = layout.styles.border(.Rounded);
@@ -81,8 +77,6 @@ fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
         _ = input.styles.border(.Rounded);
         break :a input;
     } else null;
-
-    try terminal.logger.logBufPrint(2048, "{?any}", .{input});
 
     const layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
@@ -133,21 +127,30 @@ fn stdinHandler(terminal: *tui.Terminal(Model), data: []const u8) !void {
 }
 
 fn mouseHandler(context: *tui.RenderContext(Model, void), data: tui.events.MouseButtonEvent) !void {
+    var clickPoint = tui.Pos{ .x = data.x, .y = data.y };
+    if (context.config.screenType == .Main) {
+        if (clickPoint.y >= context.terminalUtils.cursorPos.y) {
+            clickPoint.y -= context.terminalUtils.cursorPos.y - 1;
+        } else return;
+    }
+
     if (data.button == .Left) a: {
         const rootEl = context.rendered orelse break :a;
-        const elOrNull = findElementContainingPoint(rootEl, .{ .x = data.x, .y = data.y });
-        if (elOrNull) |el| {
-            const elId = el.id orelse break :a;
-            if (std.mem.eql(u8, elId, "input")) {
-                try context.logger.logBufPrint(4096, "HERE", .{});
-                context.terminal.model.hidden = true;
-                context.terminal.stateChanged();
-            }
+        const elOrNull = findElementContainingPointWithId(rootEl, clickPoint, "input");
+        if (elOrNull != null) {
+            context.terminal.model.hidden = true;
+            context.terminal.stateChanged();
         }
     }
 }
 
-fn findElementContainingPoint(el: *tui.UIElement, point: tui.Pos) ?*tui.UIElement {
+fn findElementContainingPointWithId(
+    el: *tui.UIElement,
+    point: tui.Pos,
+    id: []const u8,
+) ?*tui.UIElement {
+    const matchesId = if (el.id) |elId| std.mem.eql(u8, id, elId) else false;
+
     switch (el.variant) {
         .Layout => |layout| {
             const elements = switch (layout) {
@@ -155,26 +158,26 @@ fn findElementContainingPoint(el: *tui.UIElement, point: tui.Pos) ?*tui.UIElemen
                 .Vertical => |info| info.elements,
             };
 
-            const inThisEl = if (pointInElement(el.layoutInfo, point)) el else null;
-            if (inThisEl == null) return null;
+            if (!pointInElement(el.layoutInfo, point)) return null;
+            if (matchesId) return el;
 
             for (elements) |layoutElOrNull| {
                 const layoutEl = layoutElOrNull orelse continue;
-                if (findElementContainingPoint(layoutEl, point)) |res| {
+                if (findElementContainingPointWithId(layoutEl, point, id)) |res| {
                     return res;
                 }
             }
 
-            return inThisEl;
+            return null;
         },
         .Text => {
-            return if (pointInElement(el.layoutInfo, point)) el else null;
+            return if (pointInElement(el.layoutInfo, point) and matchesId) el else null;
         },
     }
 }
 
 fn pointInElement(layoutInfo: tui.ElementLayoutInfo, point: tui.Pos) bool {
-    const inX = point.x >= layoutInfo.x and point.x <= layoutInfo.x + layoutInfo.width;
-    const inY = point.y >= layoutInfo.y and point.y <= layoutInfo.y + layoutInfo.height;
+    const inX = point.x > layoutInfo.x and point.x <= layoutInfo.x + layoutInfo.width;
+    const inY = point.y > layoutInfo.y and point.y <= layoutInfo.y + layoutInfo.height;
     return inX and inY;
 }

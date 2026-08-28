@@ -24,7 +24,8 @@ pub fn handleRender(
     renderUI: RenderUIFn(ModelType),
     writer: *Writer,
 ) !void {
-    context.terminalUtils.prepareForReRender();
+    const success = try context.terminalUtils.prepareForReRender(writer);
+    if (!success) return;
     context.rendered = null;
 
     globalState.rendering = true;
@@ -73,15 +74,7 @@ pub fn render(
     context.backBuffer.rendering = .{};
     context.frontBuffer.rendering = .{};
 
-    const lastBackBufferLine = context.backBuffer.buffer.items[context.backBuffer.lineLimit - 1].items;
-    if (lastBackBufferLine.len < context.terminalUtils.size.width) {
-        try sequences.setCursorCol(@intCast(lastBackBufferLine.len), writer);
-        try sequences.eraseDisplayAfterCursor(writer);
-    }
-
     context.state.rowOffset = @intCast(context.backBuffer.lineLimit);
-
-    try sequences.eraseDisplayAfterCursor(writer);
 
     if (context.config.screenType == .Main) {
         try sequences.setCursorPos(context, 1, 1, writer);
@@ -128,7 +121,21 @@ fn writeDiff(
         if (rowIndex + 1 < frontBufferLines.len) {
             try sequences.simulateNewline(context, writer);
         } else {
-            try sequences.setCursorCol(context.terminalUtils.size.width + 1, writer);
+            switch (context.config.screenType) {
+                .Alternate => {
+                    try sequences.setCursorPosAbsolute(
+                        context,
+                        @intCast(context.backBuffer.lineLimit + 1),
+                        1,
+                        writer,
+                    );
+                    try sequences.eraseDisplayAfterCursor(writer);
+                },
+                .Main => {
+                    try sequences.setCursorCol(context.terminalUtils.size.width + 1, writer);
+                    try sequences.eraseDisplayAfterCursor(writer);
+                },
+            }
         }
 
         atCol = 0;

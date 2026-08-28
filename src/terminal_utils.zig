@@ -75,6 +75,7 @@ pub const TerminalUtils = struct {
     logger: *logMod.Logger,
     eventArena: std.heap.ArenaAllocator,
     renderArena: std.heap.ArenaAllocator,
+    cursorPos: utils.Pos,
 
     pub fn init(
         config: configMod.Config,
@@ -91,11 +92,14 @@ pub const TerminalUtils = struct {
 
         initResizeEvent();
 
+        const cursorPos = try getCursorPosition(writer);
+
         return .{
             .size = size,
             .logger = logger,
             .eventArena = eventArena,
             .renderArena = renderArena,
+            .cursorPos = cursorPos,
         };
     }
 
@@ -185,8 +189,17 @@ pub const TerminalUtils = struct {
         state.forceFullRender = true;
     }
 
-    pub fn prepareForReRender(self: *Self) void {
+    pub fn prepareForReRender(self: *Self, writer: *Writer) !bool {
         _ = self.renderArena.reset(.retain_capacity);
+        const cursorPos = getCursorPosition(writer) catch |err| {
+            if (err == error.InvalidResponse) {
+                globalState.needsRerender = true;
+                return false;
+            }
+            return err;
+        };
+        self.cursorPos = cursorPos;
+        return true;
     }
 };
 
@@ -282,4 +295,41 @@ fn deinitTermBehavior(config: configMod.Config, writer: *Writer) !void {
     try sequences.disableMouseReporting(writer);
 
     try writer.flush();
+}
+
+fn getCursorPosition(writer: *Writer) !utils.Pos {
+    const stdinHandle = std.Io.File.stdin().handle;
+
+    try writer.writeAll("\x1b[6n");
+    try writer.flush();
+
+    var buf: [32]u8 = undefined;
+    var index: usize = 0;
+
+    while (index < buf.len) {
+        const amount = try std.posix.read(stdinHandle, buf[index .. index + 1]);
+        if (amount == 0) return error.UnexpectedEOF;
+        if (buf[index] == 'R') {
+            index += 1;
+            break;
+        }
+        index += 1;
+    }
+
+    const res = buf[0..index];
+
+    if (res.len < 2 or res.len < 6 or res[0] != '\x1b' or res[1] != '[') {
+        return error.InvalidResponse;
+    }
+
+    const data = res[2 .. res.len - 1];
+    var split = std.mem.splitScalar(u8, data, ';');
+
+    const rowStr = split.next() orelse return error.InvalidResponse;
+    const colStr = split.next() orelse return error.InvalidResponse;
+
+    const row = std.fmt.parseInt(u16, rowStr, 10) catch return error.InvalidResponse;
+    const col = std.fmt.parseInt(u16, colStr, 10) catch return error.InvalidResponse;
+
+    return utils.Pos{ .y = row, .x = col };
 }
