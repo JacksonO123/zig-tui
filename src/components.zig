@@ -30,7 +30,7 @@ const LayoutTypes = enum {
 const LayoutUtil = struct {
     const Self = @This();
 
-    elements: []const *ui.UIElement,
+    elements: []const ?*ui.UIElement,
     constraints: []ui.Constraint,
 
     pub fn getConstraint(self: Self, index: usize) ?ui.Constraint {
@@ -50,7 +50,7 @@ pub const Layout = union(LayoutTypes) {
 
     pub fn fromElements(
         allocator: Allocator,
-        elements: []const *ui.UIElement,
+        elements: []const ?*ui.UIElement,
         direction: LayoutTypes,
     ) !*ui.UIElement {
         return fromElementsAndConstraints(allocator, elements, &.{}, direction);
@@ -58,11 +58,11 @@ pub const Layout = union(LayoutTypes) {
 
     pub fn fromElementsAndConstraints(
         allocator: Allocator,
-        elements: []const *ui.UIElement,
+        elements: []const ?*ui.UIElement,
         constraints: []const ui.Constraint,
         direction: LayoutTypes,
     ) !*ui.UIElement {
-        const elementSlice = try allocator.dupe(*ui.UIElement, elements);
+        const elementSlice = try allocator.dupe(?*ui.UIElement, elements);
         const constraintSlice = try allocator.dupe(ui.Constraint, constraints);
 
         const layout: Self = switch (direction) {

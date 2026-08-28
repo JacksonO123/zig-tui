@@ -199,7 +199,9 @@ pub fn setElementDimensions(
 
                     var possibleFillWidth = sizeConstraint.width;
 
-                    for (layoutInfo.elements, 0..) |el, index| {
+                    for (layoutInfo.elements, 0..) |elOrNull, index| {
+                        const el = elOrNull orelse continue;
+
                         const layoutConstraint = layoutInfo.getConstraint(index);
                         const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
                             var newConstraint = getSizeConstraint(
@@ -265,7 +267,9 @@ pub fn setElementDimensions(
 
                     var widthAcc: u16 = 0;
                     i = 0;
-                    for (layoutInfo.elements, 0..) |el, index| {
+                    for (layoutInfo.elements, 0..) |elOrNull, index| {
+                        const el = elOrNull orelse continue;
+
                         el.layoutInfo.x = elInfo.x + preAdjust.width + widthAcc;
 
                         const layoutConstraint = layoutInfo.getConstraint(index);
@@ -309,7 +313,9 @@ pub fn setElementDimensions(
 
                     elInfo.height = 0;
 
-                    for (layoutInfo.elements, 0..) |el, index| {
+                    for (layoutInfo.elements, 0..) |elOrNull, index| {
+                        const el = elOrNull orelse continue;
+
                         const layoutConstraint = layoutInfo.getConstraint(index);
                         const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
                             var newConstraint = getSizeConstraint(
@@ -375,7 +381,9 @@ pub fn setElementDimensions(
 
                     var heightAcc: u16 = 0;
                     i = 0;
-                    for (layoutInfo.elements, 0..) |el, index| {
+                    for (layoutInfo.elements, 0..) |elOrNull, index| {
+                        const el = elOrNull orelse continue;
+
                         el.layoutInfo.y = elInfo.y + preAdjust.height + heightAcc;
 
                         const layoutConstraint = layoutInfo.getConstraint(index);

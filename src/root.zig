@@ -16,6 +16,7 @@ const styles = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
 const ui = @import("ui.zig");
+const utils = @import("utils.zig");
 
 // exports
 pub const events = @import("events/event_exports.zig");
@@ -28,13 +29,15 @@ pub const UIElement = ui.UIElement;
 pub const Input = components.Input;
 pub const keys = constants.keys;
 pub const RgbColor = styles.RgbColor;
+pub const ElementLayoutInfo = ui.ElementLayoutInfo;
+pub const Pos = utils.Pos;
 
 const globalState = &@import("global.zig").globalState;
 
 pub const baseEvents: []const eventListeners.EventDescription = &.{
     .{ .name = "stdin", .args = eventTypes.StdinEvent },
     .{ .name = "scroll", .args = eventTypes.ScrollEventWrapper },
-    .{ .name = "mouse-btn", .args = eventTypes.MouseEventWrapper },
+    .{ .name = "mouse-btn", .args = eventTypes.MouseButtonEventWrapper },
 };
 
 pub inline fn initTuiLib(
@@ -73,11 +76,7 @@ pub fn render(
 ) !void {
     while (true) {
         var allow = true;
-        defer {
-            if (allow) {
-                globalState.eventUtil.event.reset();
-            }
-        }
+        defer if (allow) globalState.eventUtil.event.reset();
 
         const pollData, var readData = try context.terminalUtils.pollEvents(
             io,
@@ -120,7 +119,20 @@ pub fn render(
                             try context.emit("scroll", .{scrollEvent});
                         },
                         else => {
-                            try context.emit("mouse-btn", .{eventData.event});
+                            const btn: eventTypes.MouseEventButton = switch (eventData.event.button) {
+                                0 => .Left,
+                                2 => .Right,
+                                else => .{
+                                    .Other = eventData.event.button,
+                                },
+                            };
+                            const event = eventTypes.MouseButtonEvent{
+                                .button = btn,
+                                .x = eventData.event.x,
+                                .y = eventData.event.y,
+                                .pressed = eventData.event.pressed,
+                            };
+                            try context.emit("mouse-btn", .{event});
                         },
                     }
 

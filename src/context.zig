@@ -11,6 +11,7 @@ const sequences = @import("sequences.zig");
 const terminalMod = @import("terminal.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const utils = @import("utils.zig");
+const ui = @import("ui.zig");
 
 pub const debugConfig = .{
     .setBehavior = true,
@@ -39,6 +40,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
         state: RenderState,
         logger: *logMod.Logger,
         eventListeners: *EventListenerCollection,
+        rendered: ?*ui.UIElement = null,
 
         pub inline fn init(
             gpa: Allocator,

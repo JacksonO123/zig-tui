@@ -20,15 +20,19 @@ pub fn RenderUIFn(comptime ModelType: type) type {
 pub fn handleRender(
     comptime ModelType: type,
     gpa: Allocator,
-    renderContext: *RenderContext(ModelType, void),
+    context: *RenderContext(ModelType, void),
     renderUI: RenderUIFn(ModelType),
     writer: *Writer,
 ) !void {
-    renderContext.terminalUtils.prepareForReRender();
+    context.terminalUtils.prepareForReRender();
+    context.rendered = null;
+
     globalState.rendering = true;
-    const el = try renderUI(renderContext.terminal);
-    try render(gpa, @ptrCast(renderContext), el, writer);
-    globalState.rendering = false;
+    defer globalState.rendering = false;
+
+    const el = try renderUI(context.terminal);
+    context.rendered = el;
+    try render(gpa, @ptrCast(context), el, writer);
 }
 
 pub fn render(
@@ -77,6 +81,8 @@ pub fn render(
 
     context.state.rowOffset = @intCast(context.backBuffer.lineLimit);
 
+    try sequences.eraseDisplayAfterCursor(writer);
+
     if (context.config.screenType == .Main) {
         try sequences.setCursorPos(context, 1, 1, writer);
     }
@@ -121,6 +127,8 @@ fn writeDiff(
 
         if (rowIndex + 1 < frontBufferLines.len) {
             try sequences.simulateNewline(context, writer);
+        } else {
+            try sequences.setCursorCol(context.terminalUtils.size.width + 1, writer);
         }
 
         atCol = 0;
