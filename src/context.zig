@@ -12,6 +12,12 @@ const terminalMod = @import("terminal.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const utils = @import("utils.zig");
 const ui = @import("ui.zig");
+const types = @import("types.zig");
+const renderer = @import("renderer.zig");
+const eventUtils = @import("events/event_utils.zig");
+const eventTypes = @import("events/event_types.zig");
+
+const globalState = &@import("global.zig").globalState;
 
 pub const debugConfig = .{
     .setBehavior = true,
@@ -33,14 +39,14 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
         gpa: Allocator,
         model: *ModelType,
         config: configMod.Config,
-        terminal: *terminalMod.Terminal(ModelType),
+        terminal: *terminalMod.Terminal(ModelType, RegisterEvents),
         backBuffer: backBufferMod.BackBuffer,
         frontBuffer: frontBufferMod.FrontBuffer,
-        terminalUtils: terminalUtils.TerminalUtils,
+        terminalUtils: *terminalUtils.TerminalUtils,
         state: RenderState,
         logger: *logMod.Logger,
-        eventListeners: *EventListenerCollection,
         rendered: ?*ui.UIElement = null,
+        eventListeners: *EventListenerCollection,
 
         pub inline fn init(
             gpa: Allocator,
@@ -52,20 +58,27 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             const logger = try gpa.create(logMod.Logger);
             logger.* = try logMod.Logger.init(io);
 
-            var termUtils = try terminalUtils.TerminalUtils.init(config, logger, writer);
-            const terminal = try gpa.create(terminalMod.Terminal(ModelType));
-            terminal.* = terminalMod.Terminal(ModelType).init(
+            const termUtils = try gpa.create(terminalUtils.TerminalUtils);
+            termUtils.* = try terminalUtils.TerminalUtils.init(
+                config,
+                logger,
+                writer,
+            );
+
+            const eventListeners = try gpa.create(EventListenerCollection);
+            eventListeners.* = try EventListenerCollection.init(termUtils.renderArena.allocator());
+
+            const terminal = try gpa.create(terminalMod.Terminal(ModelType, RegisterEvents));
+            terminal.* = terminalMod.Terminal(ModelType, RegisterEvents).init(
                 termUtils.renderArena.allocator(),
                 io,
                 model,
                 gpa,
                 logger,
+                eventListeners,
             );
 
             const backBuffer = try backBufferMod.BackBuffer.init(gpa, termUtils.size);
-
-            const eventListenersPtr = try gpa.create(EventListenerCollection);
-            eventListenersPtr.* = try EventListenerCollection.init(gpa);
 
             return .{
                 .gpa = gpa,
@@ -77,7 +90,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
                 .model = model,
                 .logger = logger,
                 .state = .{},
-                .eventListeners = eventListenersPtr,
+                .eventListeners = eventListeners,
             };
         }
 
@@ -85,6 +98,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             self: *Self,
             writer: *Writer,
         ) void {
+            self.gpa.destroy(self.terminalUtils);
             self.backBuffer.deinit(self.gpa);
             self.frontBuffer.deinit(self.gpa);
             self.terminalUtils.deinit(self.config, writer);
@@ -105,6 +119,97 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
 
         pub fn emit(self: *Self, comptime name: []const u8, payload: anytype) !void {
             try self.eventListeners.emit(name, payload);
+        }
+
+        pub fn render(
+            self: *Self,
+            io: std.Io,
+            renderUI: renderer.RenderUIFn(ModelType, RegisterEvents),
+            writer: *Writer,
+        ) !void {
+            while (true) {
+                var allow = true;
+                defer if (allow) globalState.eventUtil.event.reset();
+
+                const pollData, var readData = try self.terminalUtils.pollEvents(
+                    io,
+                    globalState.needsRerender,
+                );
+                const neededRerender = globalState.needsRerender;
+                globalState.needsRerender = false;
+
+                if (pollData.includes(.Resize)) {
+                    const size = try terminalUtils.getTermSize(self.config);
+                    self.terminalUtils.onTerminalResize(self.config, &self.state, size);
+                    try renderer.handleRender(ModelType, RegisterEvents, self.gpa, @ptrCast(self), renderUI, writer);
+                }
+
+                if (pollData.includes(.StateChange) or neededRerender) {
+                    try renderer.handleRender(ModelType, RegisterEvents, self.gpa, @ptrCast(self), renderUI, writer);
+                }
+
+                if (pollData.includes(.Stdin)) {
+                    allow = false;
+
+                    if (readData.len == 0) continue;
+
+                    while (readData.len > 0) {
+                        if (eventUtils.handleMouseEvent(readData)) |eventData| {
+                            switch (eventData.event.button) {
+                                64, 65 => {
+                                    const direction: eventTypes.ScrollDirection = switch (eventData.event.button) {
+                                        64 => .Up,
+                                        65 => .Down,
+                                        else => unreachable,
+                                    };
+                                    const scrollEvent = eventTypes.ScrollEvent{
+                                        .direction = direction,
+                                        .pos = .{
+                                            .x = eventData.event.x,
+                                            .y = eventData.event.y,
+                                        },
+                                    };
+                                    try self.emit("scroll", .{scrollEvent});
+                                },
+                                else => {
+                                    const btn: eventTypes.MouseEventButton = switch (eventData.event.button) {
+                                        0 => .Left,
+                                        2 => .Right,
+                                        else => .{
+                                            .Other = eventData.event.button,
+                                        },
+                                    };
+                                    const event = eventTypes.MouseButtonEvent{
+                                        .button = btn,
+                                        .x = eventData.event.x,
+                                        .y = eventData.event.y,
+                                        .pressed = eventData.event.pressed,
+                                    };
+                                    try self.emit("mouse-btn", .{event});
+                                },
+                            }
+
+                            readData = readData[eventData.len..];
+                        }
+
+                        if (readData.len == 0) break;
+
+                        for (readData) |byte| {
+                            switch (byte) {
+                                // ctrl c
+                                3,
+                                // esc
+                                27,
+                                => return,
+                                else => {},
+                            }
+                        }
+
+                        try self.emit("stdin", .{readData});
+                        readData = &.{};
+                    }
+                }
+            }
         }
     };
 }

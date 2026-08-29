@@ -155,3 +155,11 @@ pub const Input = struct {
         );
     }
 };
+
+pub const Button = struct {
+    pub fn create(allocator: Allocator, id: []const u8, label: []const u8) !*ui.UIElement {
+        var text = try Text.fromConstText(allocator, label);
+        text.id = id;
+        return text;
+    }
+};

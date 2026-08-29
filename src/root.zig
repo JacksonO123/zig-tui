@@ -17,20 +17,31 @@ const terminalUtils = @import("terminal_utils.zig");
 const termMod = @import("terminal.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
+const types = @import("types.zig");
 
 // exports
-pub const events = @import("events/event_exports.zig");
-pub const Text = components.Text;
-pub const Layout = components.Layout;
+
+// core
 pub const Config = configMod.Config;
 pub const RenderContext = contextMod.RenderContext;
 pub const Terminal = termMod.Terminal;
 pub const UIElement = ui.UIElement;
-pub const Input = components.Input;
+
+// events
+pub const events = @import("events/event_exports.zig");
 pub const keys = constants.keys;
+
+// utils
 pub const RgbColor = styles.RgbColor;
 pub const ElementLayoutInfo = ui.ElementLayoutInfo;
 pub const Pos = utils.Pos;
+pub const formatRegisteredEvents = eventListeners.formatRegisteredEvents;
+
+// ui
+pub const Text = components.Text;
+pub const Layout = components.Layout;
+pub const Input = components.Input;
+pub const Button = components.Button;
 
 const globalState = &@import("global.zig").globalState;
 
@@ -62,99 +73,4 @@ pub inline fn initTuiLib(
     );
     try contextMod.postInit(@ptrCast(ptr), writer);
     return ptr;
-}
-
-pub fn render(
-    comptime ModelType: type,
-    io: std.Io,
-    context: *contextMod.RenderContext(
-        ModelType,
-        eventListeners.formatRegisteredEvents(baseEvents),
-    ),
-    renderUI: renderer.RenderUIFn(ModelType),
-    writer: *Writer,
-) !void {
-    while (true) {
-        var allow = true;
-        defer if (allow) globalState.eventUtil.event.reset();
-
-        const pollData, var readData = try context.terminalUtils.pollEvents(
-            io,
-            globalState.needsRerender,
-        );
-        const neededRerender = globalState.needsRerender;
-        globalState.needsRerender = false;
-
-        if (pollData.includes(.Resize)) {
-            const size = try terminalUtils.getTermSize(context.config);
-            context.terminalUtils.onTerminalResize(context.config, &context.state, size);
-            try renderer.handleRender(ModelType, context.gpa, @ptrCast(context), renderUI, writer);
-        }
-
-        if (pollData.includes(.StateChange) or neededRerender) {
-            try renderer.handleRender(ModelType, context.gpa, @ptrCast(context), renderUI, writer);
-        }
-
-        if (pollData.includes(.Stdin)) {
-            allow = false;
-
-            if (readData.len == 0) continue;
-
-            while (readData.len > 0) {
-                if (eventUtils.handleMouseEvent(readData)) |eventData| {
-                    switch (eventData.event.button) {
-                        64, 65 => {
-                            const direction: eventTypes.ScrollDirection = switch (eventData.event.button) {
-                                64 => .Up,
-                                65 => .Down,
-                                else => unreachable,
-                            };
-                            const scrollEvent = eventTypes.ScrollEvent{
-                                .direction = direction,
-                                .pos = .{
-                                    .x = eventData.event.x,
-                                    .y = eventData.event.y,
-                                },
-                            };
-                            try context.emit("scroll", .{scrollEvent});
-                        },
-                        else => {
-                            const btn: eventTypes.MouseEventButton = switch (eventData.event.button) {
-                                0 => .Left,
-                                2 => .Right,
-                                else => .{
-                                    .Other = eventData.event.button,
-                                },
-                            };
-                            const event = eventTypes.MouseButtonEvent{
-                                .button = btn,
-                                .x = eventData.event.x,
-                                .y = eventData.event.y,
-                                .pressed = eventData.event.pressed,
-                            };
-                            try context.emit("mouse-btn", .{event});
-                        },
-                    }
-
-                    readData = readData[eventData.len..];
-                }
-
-                if (readData.len == 0) break;
-
-                for (readData) |byte| {
-                    switch (byte) {
-                        // ctrl c
-                        3,
-                        // esc
-                        27,
-                        => return,
-                        else => {},
-                    }
-                }
-
-                try context.emit("stdin", .{readData});
-                readData = &.{};
-            }
-        }
-    }
 }

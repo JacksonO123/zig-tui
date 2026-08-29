@@ -46,7 +46,7 @@ fn progressBar(allocator: Allocator, percent: f32) !*tui.UIElement {
     return layout;
 }
 
-fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
+fn renderUI(terminal: *tui.Terminal(Model, tui.formatRegisteredEvents(tui.baseEvents))) !*tui.UIElement {
     if (terminal.model.counter < terminal.model.to) {
         terminal.model.counter += 1;
         terminal.stateChanged();
@@ -78,9 +78,13 @@ fn renderUI(terminal: *tui.Terminal(Model)) !*tui.UIElement {
         break :a input;
     } else null;
 
+    const button = try tui.Button.create(allocator, "button", "Click me");
+
+    const hLayout = try tui.Layout.fromElements(allocator, &.{ input, button }, .Horizontal);
+
     const layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{ text, bar, input },
+        &.{ text, bar, hLayout },
         &.{
             .{},
             .{
@@ -109,12 +113,15 @@ pub fn main(init: std.process.Init) !void {
     }
 
     try context.on("stdin", .{context.terminal}, stdinHandler);
-    try context.on("mouse-btn", .{@as(*tui.RenderContext(Model, void), @ptrCast(context))}, mouseHandler);
+    try context.on("mouse-btn", .{context}, mouseHandler);
 
-    try tui.render(Model, init.io, context, renderUI, writer);
+    try context.render(init.io, renderUI, writer);
 }
 
-fn stdinHandler(terminal: *tui.Terminal(Model), data: []const u8) !void {
+fn stdinHandler(
+    terminal: *tui.Terminal(Model, tui.formatRegisteredEvents(tui.baseEvents)),
+    data: []const u8,
+) !void {
     const newStr = if (data[0] == tui.keys.Backspace)
         try terminal.gpa.dupe(u8, terminal.model.inputValue[0..terminal.model.inputValue.len -| 1])
     else
@@ -126,22 +133,27 @@ fn stdinHandler(terminal: *tui.Terminal(Model), data: []const u8) !void {
     terminal.stateChanged();
 }
 
-fn mouseHandler(context: *tui.RenderContext(Model, void), data: tui.events.MouseButtonEvent) !void {
-    var clickPoint = tui.Pos{ .x = data.x, .y = data.y };
-    if (context.config.screenType == .Main) {
-        if (clickPoint.y >= context.terminalUtils.cursorPos.y) {
-            clickPoint.y -= context.terminalUtils.cursorPos.y - 1;
-        } else return;
-    }
+fn mouseHandler(
+    context: *tui.RenderContext(Model, tui.formatRegisteredEvents(tui.baseEvents)),
+    data: tui.events.MouseButtonEvent,
+) !void {
+    _ = context;
+    _ = data;
+    // var clickPoint = tui.Pos{ .x = data.x, .y = data.y };
+    // if (context.config.screenType == .Main) {
+    //     if (clickPoint.y >= context.terminalUtils.cursorPos.y) {
+    //         clickPoint.y -= context.terminalUtils.cursorPos.y - 1;
+    //     } else return;
+    // }
 
-    if (data.button == .Left) a: {
-        const rootEl = context.rendered orelse break :a;
-        const elOrNull = findElementContainingPointWithId(rootEl, clickPoint, "input");
-        if (elOrNull != null) {
-            context.terminal.model.hidden = true;
-            context.terminal.stateChanged();
-        }
-    }
+    // if (data.button == .Left) a: {
+    //     const rootEl = context.rendered orelse break :a;
+    //     const elOrNull = findElementContainingPointWithId(rootEl, clickPoint, "input");
+    //     if (elOrNull != null) {
+    //         context.terminal.model.hidden = true;
+    //         context.terminal.stateChanged();
+    //     }
+    // }
 }
 
 fn findElementContainingPointWithId(

@@ -13,18 +13,22 @@ const utils = @import("utils.zig");
 
 const globalState = &@import("global.zig").globalState;
 
-pub fn RenderUIFn(comptime ModelType: type) type {
-    return fn (*termMod.Terminal(ModelType)) anyerror!*ui.UIElement;
+pub fn RenderUIFn(comptime ModelType: type, comptime RegisteredEvents: type) type {
+    return fn (*termMod.Terminal(ModelType, RegisteredEvents)) anyerror!*ui.UIElement;
 }
 
 pub fn handleRender(
     comptime ModelType: type,
+    comptime RegisteredEvents: type,
     gpa: Allocator,
-    context: *RenderContext(ModelType, void),
-    renderUI: RenderUIFn(ModelType),
+    context: *RenderContext(ModelType, RegisteredEvents),
+    renderUI: RenderUIFn(ModelType, RegisteredEvents),
     writer: *Writer,
 ) !void {
-    const success = try context.terminalUtils.prepareForReRender(writer);
+    const success = try context.terminalUtils.prepareForReRender(
+        @ptrCast(context.eventListeners),
+        writer,
+    );
     if (!success) return;
     context.rendered = null;
 

@@ -9,6 +9,7 @@ const logMod = @import("logger.zig");
 const sequences = @import("sequences.zig");
 const types = @import("types.zig");
 const utils = @import("utils.zig");
+const eventListeners = @import("events/event_listeners.zig");
 
 const globalState = &@import("global.zig").globalState;
 
@@ -189,8 +190,15 @@ pub const TerminalUtils = struct {
         state.forceFullRender = true;
     }
 
-    pub fn prepareForReRender(self: *Self, writer: *Writer) !bool {
+    pub fn prepareForReRender(
+        self: *Self,
+        listeners: *eventListeners.EventListenerCollection(void),
+        writer: *Writer,
+    ) !bool {
+        try listeners.removeTemporaryListeners();
+
         _ = self.renderArena.reset(.retain_capacity);
+
         const cursorPos = getCursorPosition(writer) catch |err| {
             if (err == error.InvalidResponse) {
                 globalState.needsRerender = true;
@@ -199,6 +207,7 @@ pub const TerminalUtils = struct {
             return err;
         };
         self.cursorPos = cursorPos;
+
         return true;
     }
 };
