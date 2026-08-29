@@ -490,3 +490,41 @@ fn trimTextElContentToWidth(el: *UIElement, width: u16) void {
         line.len = @min(line.len, width);
     }
 }
+
+pub fn getIdsContainingPoint(
+    allocator: Allocator,
+    element: *UIElement,
+    point: utils.Pos,
+    ids: *std.ArrayList([]const u8),
+) !void {
+    switch (element.variant) {
+        .Text => a: {
+            if (!pointInElement(element.layoutInfo, point)) break :a;
+            const id = element.id orelse break :a;
+            try ids.append(allocator, id);
+        },
+        .Layout => |layout| a: {
+            if (!pointInElement(element.layoutInfo, point)) break :a;
+
+            if (element.id) |id| {
+                try ids.append(allocator, id);
+            }
+
+            const elements = switch (layout) {
+                .Horizontal => |info| info.elements,
+                .Vertical => |info| info.elements,
+            };
+
+            for (elements) |elOrNull| {
+                const el = elOrNull orelse continue;
+                try getIdsContainingPoint(allocator, el, point, ids);
+            }
+        },
+    }
+}
+
+fn pointInElement(layoutInfo: ElementLayoutInfo, point: utils.Pos) bool {
+    const inX = point.x > layoutInfo.x and point.x <= layoutInfo.x + layoutInfo.width;
+    const inY = point.y > layoutInfo.y and point.y <= layoutInfo.y + layoutInfo.height;
+    return inX and inY;
+}

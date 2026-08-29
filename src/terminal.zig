@@ -19,7 +19,6 @@ pub fn Terminal(comptime ModelType: type, comptime RegisterEvents: type) type {
         model: *ModelType,
         logger: *logMod.Logger,
         listeners: *EventListenerCollection,
-        idClickMap: std.StringHashMapUnmanaged(IdClickHandlerManager) = .empty,
 
         pub fn init(
             allocator: Allocator,
@@ -61,7 +60,5 @@ pub fn Terminal(comptime ModelType: type, comptime RegisterEvents: type) type {
         ) !void {
             try self.listeners.onTemporary(name, baseArgs, handler);
         }
-
-        pub fn onIdClick() void {}
     };
 }

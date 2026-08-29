@@ -14,12 +14,18 @@ pub const Model = struct {
 
     inputValue: []const u8 = &.{},
 
+    leftMouseDownIds: ?[]const []const u8 = null,
+    mouseUpId: ?[]const u8 = null,
+
     pub fn init(to: u32) Self {
         return .{ .to = to };
     }
 
     pub fn deinit(self: Self, allocator: Allocator) void {
         allocator.free(self.inputValue);
+        if (self.leftMouseDownIds) |ids| {
+            allocator.free(ids);
+        }
     }
 };
 
@@ -78,13 +84,32 @@ fn renderUI(terminal: *tui.Terminal(Model, tui.formatRegisteredEvents(tui.baseEv
         break :a input;
     } else null;
 
-    const button = try tui.Button.create(allocator, "button", "Click me");
+    var button = try tui.Button.create(allocator, "button", "Click me");
+    _ = button.styles.border(.Rounded).bg(.Magenta).fg(.Black);
 
-    const hLayout = try tui.Layout.fromElements(allocator, &.{ input, button }, .Horizontal);
+    var textsList: std.ArrayList(*tui.UIElement) = .empty;
+    if (terminal.model.leftMouseDownIds) |ids| {
+        for (ids) |id| {
+            const idText = try tui.Text.fromConstText(allocator, id);
+            try textsList.append(allocator, idText);
+        }
+    }
+
+    const textsLayout = try tui.Layout.fromElements(allocator, textsList.items, .Horizontal);
+
+    const hiImHere = if (terminal.model.leftMouseDownIds) |ids|
+        if (containsSlice(ids, "button"))
+            try tui.Text.fromConstText(allocator, "hi im here")
+        else
+            null
+    else
+        null;
+
+    const hLayout = try tui.Layout.fromElements(allocator, &.{ input, button, hiImHere }, .Horizontal);
 
     const layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{ text, bar, hLayout },
+        &.{ text, bar, hLayout, textsLayout },
         &.{
             .{},
             .{
@@ -97,6 +122,14 @@ fn renderUI(terminal: *tui.Terminal(Model, tui.formatRegisteredEvents(tui.baseEv
     );
 
     return layout;
+}
+
+fn containsSlice(haystack: []const []const u8, value: []const u8) bool {
+    for (haystack) |item| {
+        if (std.mem.eql(u8, item, value)) return true;
+    }
+
+    return false;
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -137,59 +170,28 @@ fn mouseHandler(
     context: *tui.RenderContext(Model, tui.formatRegisteredEvents(tui.baseEvents)),
     data: tui.events.MouseButtonEvent,
 ) !void {
-    _ = context;
-    _ = data;
-    // var clickPoint = tui.Pos{ .x = data.x, .y = data.y };
-    // if (context.config.screenType == .Main) {
-    //     if (clickPoint.y >= context.terminalUtils.cursorPos.y) {
-    //         clickPoint.y -= context.terminalUtils.cursorPos.y - 1;
-    //     } else return;
-    // }
+    switch (data.button) {
+        .Left => a: {
+            if (data.pressed) {
+                const point = tui.Pos{ .x = data.x, .y = data.y };
+                var ids: std.ArrayList([]const u8) = .empty;
+                const rendered = context.rendered orelse break :a;
+                try tui.getIdsContainingPoint(context.gpa, rendered, point, &ids);
 
-    // if (data.button == .Left) a: {
-    //     const rootEl = context.rendered orelse break :a;
-    //     const elOrNull = findElementContainingPointWithId(rootEl, clickPoint, "input");
-    //     if (elOrNull != null) {
-    //         context.terminal.model.hidden = true;
-    //         context.terminal.stateChanged();
-    //     }
-    // }
-}
-
-fn findElementContainingPointWithId(
-    el: *tui.UIElement,
-    point: tui.Pos,
-    id: []const u8,
-) ?*tui.UIElement {
-    const matchesId = if (el.id) |elId| std.mem.eql(u8, id, elId) else false;
-
-    switch (el.variant) {
-        .Layout => |layout| {
-            const elements = switch (layout) {
-                .Horizontal => |info| info.elements,
-                .Vertical => |info| info.elements,
-            };
-
-            if (!pointInElement(el.layoutInfo, point)) return null;
-            if (matchesId) return el;
-
-            for (elements) |layoutElOrNull| {
-                const layoutEl = layoutElOrNull orelse continue;
-                if (findElementContainingPointWithId(layoutEl, point, id)) |res| {
-                    return res;
+                if (context.model.leftMouseDownIds) |*modelIds| {
+                    context.gpa.free(modelIds.*);
+                    modelIds.* = try ids.toOwnedSlice(context.gpa);
+                } else {
+                    context.model.leftMouseDownIds = try ids.toOwnedSlice(context.gpa);
                 }
+            } else {
+                const ids = context.model.leftMouseDownIds orelse break :a;
+                context.gpa.free(ids);
+                context.model.leftMouseDownIds = null;
             }
 
-            return null;
+            context.terminal.stateChanged();
         },
-        .Text => {
-            return if (pointInElement(el.layoutInfo, point) and matchesId) el else null;
-        },
+        else => {},
     }
-}
-
-fn pointInElement(layoutInfo: tui.ElementLayoutInfo, point: tui.Pos) bool {
-    const inX = point.x > layoutInfo.x and point.x <= layoutInfo.x + layoutInfo.width;
-    const inY = point.y > layoutInfo.y and point.y <= layoutInfo.y + layoutInfo.height;
-    return inX and inY;
 }

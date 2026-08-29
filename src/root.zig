@@ -33,15 +33,16 @@ pub const keys = constants.keys;
 
 // utils
 pub const RgbColor = styles.RgbColor;
-pub const ElementLayoutInfo = ui.ElementLayoutInfo;
 pub const Pos = utils.Pos;
 pub const formatRegisteredEvents = eventListeners.formatRegisteredEvents;
 
 // ui
+pub const ElementLayoutInfo = ui.ElementLayoutInfo;
 pub const Text = components.Text;
 pub const Layout = components.Layout;
 pub const Input = components.Input;
 pub const Button = components.Button;
+pub const getIdsContainingPoint = ui.getIdsContainingPoint;
 
 const globalState = &@import("global.zig").globalState;
 
