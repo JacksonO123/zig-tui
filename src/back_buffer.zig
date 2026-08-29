@@ -96,12 +96,14 @@ pub const BackBuffer = struct {
             .Layout => |layout| {
                 switch (layout) {
                     .Horizontal => |layoutUtil| {
-                        for (layoutUtil.elements) |el| {
+                        for (layoutUtil.elements) |elOrNull| {
+                            const el = elOrNull orelse continue;
                             try self.renderInBuffer(allocator, el, size);
                         }
                     },
                     .Vertical => |layoutUtil| {
-                        for (layoutUtil.elements) |el| {
+                        for (layoutUtil.elements) |elOrNull| {
+                            const el = elOrNull orelse continue;
                             try self.renderInBuffer(allocator, el, size);
                         }
                     },

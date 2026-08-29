@@ -1,4 +1,5 @@
 const utils = @import("../utils.zig");
+const types = @import("../types.zig");
 
 pub const StdinEvent = struct { []const u8 };
 
@@ -21,4 +22,17 @@ pub const MouseEvent = struct {
     pressed: bool,
 };
 
-pub const MouseEventWrapper = struct { MouseEvent };
+pub const MouseEventButton = union(enum) {
+    Other: u8,
+    Left,
+    Right,
+};
+
+pub const MouseButtonEvent = struct {
+    button: MouseEventButton,
+    x: u16,
+    y: u16,
+    pressed: bool,
+};
+
+pub const MouseButtonEventWrapper = struct { MouseButtonEvent };

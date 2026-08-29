@@ -13,22 +13,31 @@ const utils = @import("utils.zig");
 
 const globalState = &@import("global.zig").globalState;
 
-pub fn RenderUIFn(comptime ModelType: type) type {
-    return fn (*termMod.Terminal(ModelType)) anyerror!*ui.UIElement;
+pub fn RenderUIFn(comptime ModelType: type, comptime RegisteredEvents: type) type {
+    return fn (*termMod.Terminal(ModelType, RegisteredEvents)) anyerror!*ui.UIElement;
 }
 
 pub fn handleRender(
     comptime ModelType: type,
+    comptime RegisteredEvents: type,
     gpa: Allocator,
-    renderContext: *RenderContext(ModelType, void),
-    renderUI: RenderUIFn(ModelType),
+    context: *RenderContext(ModelType, RegisteredEvents),
+    renderUI: RenderUIFn(ModelType, RegisteredEvents),
     writer: *Writer,
 ) !void {
-    renderContext.terminalUtils.prepareForReRender();
+    const success = try context.terminalUtils.prepareForReRender(
+        @ptrCast(context.eventListeners),
+        writer,
+    );
+    if (!success) return;
+    context.rendered = null;
+
     globalState.rendering = true;
-    const el = try renderUI(renderContext.terminal);
-    try render(gpa, @ptrCast(renderContext), el, writer);
-    globalState.rendering = false;
+    defer globalState.rendering = false;
+
+    const el = try renderUI(context.terminal);
+    context.rendered = el;
+    try render(gpa, @ptrCast(context), el, writer);
 }
 
 pub fn render(
@@ -68,12 +77,6 @@ pub fn render(
     try sequences.resetStyles(writer);
     context.backBuffer.rendering = .{};
     context.frontBuffer.rendering = .{};
-
-    const lastBackBufferLine = context.backBuffer.buffer.items[context.backBuffer.lineLimit - 1].items;
-    if (lastBackBufferLine.len < context.terminalUtils.size.width) {
-        try sequences.setCursorCol(@intCast(lastBackBufferLine.len), writer);
-        try sequences.eraseDisplayAfterCursor(writer);
-    }
 
     context.state.rowOffset = @intCast(context.backBuffer.lineLimit);
 
@@ -121,6 +124,22 @@ fn writeDiff(
 
         if (rowIndex + 1 < frontBufferLines.len) {
             try sequences.simulateNewline(context, writer);
+        } else {
+            switch (context.config.screenType) {
+                .Alternate => {
+                    try sequences.setCursorPosAbsolute(
+                        context,
+                        @intCast(context.backBuffer.lineLimit + 1),
+                        1,
+                        writer,
+                    );
+                    try sequences.eraseDisplayAfterCursor(writer);
+                },
+                .Main => {
+                    try sequences.setCursorCol(context.terminalUtils.size.width + 1, writer);
+                    try sequences.eraseDisplayAfterCursor(writer);
+                },
+            }
         }
 
         atCol = 0;

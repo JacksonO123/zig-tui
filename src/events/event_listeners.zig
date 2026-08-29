@@ -77,77 +77,116 @@ pub fn EventListenerCollection(comptime RegisterEvents: type) type {
     return struct {
         const Self = @This();
         const ListenerList = std.ArrayList(ListenerInstance);
-        const ListenerMap = std.StringHashMap(*ListenerList);
+        const ListenerMap = std.StringHashMapUnmanaged(*ListenerList);
 
-        allocator: Allocator,
-        listeners: *ListenerMap,
+        renderAlloc: Allocator,
+        preservedArena: std.heap.ArenaAllocator,
+        preservedListeners: ListenerMap = .empty,
+        tempListeners: ListenerMap = .empty,
 
-        pub fn init(gpa: Allocator) !Self {
-            const preservedListenersPtr = try gpa.create(ListenerMap);
-            preservedListenersPtr.* = ListenerMap.init(gpa);
+        pub const RegisteredEvents = RegisterEvents;
+
+        pub fn init(renderAlloc: Allocator) !Self {
+            const preservedArena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 
             return .{
-                .allocator = gpa,
-                .listeners = preservedListenersPtr,
+                .renderAlloc = renderAlloc,
+                .preservedArena = preservedArena,
             };
         }
 
         pub fn deinit(self: *Self) void {
-            self.deinitListenerCollection(self.listeners);
+            self.preservedArena.deinit();
         }
 
-        fn deinitListenerCollection(self: *Self, collection: *ListenerMap) void {
-            var collectionIt = collection.valueIterator();
-            while (collectionIt.next()) |value| {
-                for (value.*.items) |*listener| {
-                    listener.destroy(self.allocator);
-                }
-                value.*.deinit(self.allocator);
-                self.allocator.destroy(value.*);
-            }
-
-            collection.deinit();
-            self.allocator.destroy(collection);
+        pub fn removeTemporaryListeners(self: *Self) !void {
+            self.tempListeners = .empty;
         }
 
-        pub fn on(
-            self: *Self,
+        fn createListener(
+            allocator: Allocator,
             comptime name: []const u8,
             baseArgs: anytype,
             comptime handler: *const @FieldType(
                 RegisterEvents,
                 name,
             ).getHandler(@TypeOf(baseArgs)),
-        ) !void {
+        ) !ListenerInstance {
             const registeredTypes = @FieldType(RegisterEvents, name);
             const listenerInstance = try ListenerInstance.init(
-                self.allocator,
+                allocator,
                 *const registeredTypes.getHandler(@TypeOf(baseArgs)),
                 registeredTypes.Args,
                 handler,
                 baseArgs,
             );
 
-            if (self.listeners.get(name)) |listeners| {
-                try listeners.append(self.allocator, listenerInstance);
+            return listenerInstance;
+        }
+
+        fn onImpl(
+            allocator: Allocator,
+            map: *ListenerMap,
+            comptime name: []const u8,
+            baseArgs: anytype,
+            comptime handler: anytype,
+        ) !void {
+            const instance = try createListener(
+                allocator,
+                name,
+                baseArgs,
+                handler,
+            );
+
+            if (map.get(name)) |listeners| {
+                try listeners.append(allocator, instance);
             } else {
-                var listeners = try self.allocator.create(ListenerList);
+                var listeners = try allocator.create(ListenerList);
                 listeners.* = .empty;
-                try listeners.append(self.allocator, listenerInstance);
-                try self.listeners.put(name, listeners);
+                try listeners.append(allocator, instance);
+                try map.put(allocator, name, listeners);
             }
         }
 
-        pub fn emit(
+        pub fn on(
             self: *Self,
+            comptime name: []const u8,
+            baseArgs: anytype,
+            comptime handler: anytype,
+        ) !void {
+            try onImpl(
+                self.preservedArena.allocator(),
+                &self.preservedListeners,
+                name,
+                baseArgs,
+                handler,
+            );
+        }
+
+        pub fn onTemporary(
+            self: *Self,
+            comptime name: []const u8,
+            baseArgs: anytype,
+            comptime handler: anytype,
+        ) !void {
+            try onImpl(self.renderAlloc.allocator(), &self.tempListeners, name, baseArgs, handler);
+        }
+
+        fn emitImpl(
+            map: *ListenerMap,
             comptime name: []const u8,
             payload: @FieldType(RegisterEvents, name).Args,
         ) !void {
-            if (self.listeners.get(name)) |listeners| {
+            if (map.get(name)) |listeners| {
                 for (listeners.items) |*listener| {
                     try listener.call(@ptrCast(&payload));
                 }
             }
+        }
+
+        pub fn emit(self: *Self, comptime name: []const u8, payload: anytype) !void {
+            try emitImpl(&self.preservedListeners, name, payload);
+            try emitImpl(&self.tempListeners, name, payload);
         }
     };
 }
