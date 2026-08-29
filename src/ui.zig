@@ -67,6 +67,113 @@ pub const Constraint = struct {
     height: ConstraintValues = .None,
 };
 
+const TextRenderUtil = struct {
+    const Self = @This();
+
+    preAdjust: utils.Size,
+    postAdjust: utils.Size,
+    sizeConstraint: utils.Size,
+    height: u16 = 1,
+    width: u16 = 0,
+    currentX: u16 = 0,
+    lines: std.ArrayList([]u8) = .empty,
+    line: std.ArrayList(u8) = .empty,
+    styles: *stylesMod.Styles,
+
+    pub fn init(
+        preAdjust: utils.Size,
+        postAdjust: utils.Size,
+        sizeConstraint: utils.Size,
+        styles: *stylesMod.Styles,
+    ) Self {
+        return .{
+            .preAdjust = preAdjust,
+            .postAdjust = postAdjust,
+            .sizeConstraint = sizeConstraint,
+            .styles = styles,
+        };
+    }
+
+    pub fn render(self: *Self, allocator: Allocator, text: []const u8) !void {
+        const utf8View = try std.unicode.Utf8View.init(text);
+        var charIt = utf8View.iterator();
+
+        if (self.preAdjust.height + self.postAdjust.height < self.sizeConstraint.height) {
+            while (charIt.nextCodepointSlice()) |chars| {
+                _ = try self.renderForSlice(allocator, chars, &charIt);
+            }
+        }
+
+        if (self.line.items.len > 0) {
+            try self.lines.append(allocator, self.line.items);
+        }
+    }
+
+    /// returns should break
+    fn tryNewline(self: *Self, allocator: Allocator) !bool {
+        const currentElHeight = self.calculateCurrentHeight();
+        if (currentElHeight >= self.sizeConstraint.height) {
+            return true;
+        }
+
+        try self.lines.append(allocator, self.line.items);
+        self.line = .empty;
+        self.height += 1;
+        self.currentX = 0;
+
+        return false;
+    }
+
+    fn atOrAboveWidthLimit(self: Self) bool {
+        return self.currentX + self.preAdjust.width + self.postAdjust.width >= self.sizeConstraint.width;
+    }
+
+    fn calculateCurrentHeight(self: Self) u16 {
+        return self.height + self.preAdjust.height + self.postAdjust.height;
+    }
+
+    /// returns should break
+    fn renderForSlice(
+        self: *Self,
+        allocator: Allocator,
+        chars: []const u8,
+        charIt: *std.unicode.Utf8Iterator,
+    ) !bool {
+        if (std.mem.eql(u8, chars, "\n")) {
+            const shouldBreak = try self.tryNewline(allocator);
+            if (shouldBreak) return true else return false;
+        }
+
+        if (self.atOrAboveWidthLimit()) {
+            if (self.styles.styles.wordWrap) {
+                var shouldBreak = try self.tryNewline(allocator);
+                if (shouldBreak) return true;
+                shouldBreak = try self.renderForSlice(allocator, chars, charIt);
+                if (shouldBreak) return true;
+
+                return false;
+            }
+
+            while (charIt.nextCodepointSlice()) |slice| {
+                if (std.mem.eql(u8, slice, "\n")) break;
+            }
+
+            if (charIt.peek(1).len == 0) return true;
+
+            const shouldBreak = try self.tryNewline(allocator);
+            if (shouldBreak) return true;
+
+            return false;
+        }
+
+        try self.line.appendSlice(allocator, chars);
+        self.currentX += 1;
+        self.width = @max(self.width, self.currentX);
+
+        return false;
+    }
+};
+
 pub fn setElementDimensions(
     allocator: Allocator,
     context: *RenderContext(anyopaque, void),
@@ -84,80 +191,24 @@ pub fn setElementDimensions(
     const postAdjust = getPostAdjustment(element.styles);
 
     switch (element.variant) {
-        .Text => |text| {
-            var currentX: u16 = 0;
-            var i: usize = 0;
+        .Text => |*text| {
+            var textRenderer = TextRenderUtil.init(
+                preAdjust,
+                postAdjust,
+                sizeConstraint,
+                &element.styles,
+            );
+            try textRenderer.render(allocator, text.data);
 
-            var lines: std.ArrayList([]u8) = .empty;
-            var line: std.ArrayList(u8) = .empty;
+            text.renderedData = textRenderer.lines.items;
+            elInfo.width = textRenderer.width;
+            elInfo.height = textRenderer.height;
 
-            if (preAdjust.height + postAdjust.height < sizeConstraint.height) {
-                while (i < text.data.len) {
-                    var incI = true;
-                    defer {
-                        if (incI) i += 1;
-                    }
-
-                    const char = text.data[i];
-
-                    if (char == '\n') {
-                        const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
-                        if (currentElHeight >= sizeConstraint.height) {
-                            break;
-                        }
-
-                        try lines.append(allocator, line.items);
-                        line = .empty;
-                        elInfo.height += 1;
-                        currentX = 0;
-
-                        continue;
-                    }
-
-                    if (currentX + preAdjust.width + postAdjust.width >= sizeConstraint.width) {
-                        if (element.styles.styles.wordWrap) {
-                            const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
-                            if (currentElHeight >= sizeConstraint.height) {
-                                break;
-                            }
-
-                            try lines.append(allocator, line.items);
-                            line = .empty;
-                            elInfo.height += 1;
-                            currentX = 0;
-                            incI = false;
-
-                            continue;
-                        }
-
-                        while (i < text.data.len and text.data[i] != '\n') : (i += 1) {}
-
-                        if (i >= text.data.len or text.data[i] != '\n') break;
-
-                        const currentElHeight = elInfo.height + preAdjust.height + postAdjust.height;
-                        if (currentElHeight >= sizeConstraint.height) {
-                            break;
-                        }
-
-                        try lines.append(allocator, line.items);
-                        line = .empty;
-                        elInfo.height += 1;
-                        currentX = 0;
-
-                        continue;
-                    }
-
-                    try line.append(allocator, char);
-                    currentX += 1;
-                    elInfo.width = @max(elInfo.width, currentX);
+            if (element.id) |id| {
+                if (std.mem.eql(u8, id, "inner")) {
+                    try context.logger.logBufPrint(256, "out 1: {d}", .{text.renderedData[0].len});
                 }
             }
-
-            if (line.items.len > 0) {
-                try lines.append(allocator, line.items);
-            }
-
-            element.variant.Text.renderedData = lines.items;
 
             const maxWidthWithConstraintValue = switch (constraint.width) {
                 .Value, .Percent, .Ratio => true,

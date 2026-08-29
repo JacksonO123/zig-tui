@@ -7,6 +7,7 @@ const stylesMod = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
+const logMod = @import("logger.zig");
 
 pub const BackBuffer = struct {
     const Self = @This();
@@ -63,17 +64,16 @@ pub const BackBuffer = struct {
             try self.ensureLineExists(allocator, element.layoutInfo.y + element.layoutInfo.height, size.width);
             var styleCpy = simpleStyles;
             styleCpy.underline = false;
-            for (self.buffer.items[element.layoutInfo.y .. element.layoutInfo.y + element.layoutInfo.height]) |line| {
-                if (element.layoutInfo.x < size.width) {
-                    const to = @min(element.layoutInfo.x + element.layoutInfo.width, size.width);
-                    @memset(line.items[element.layoutInfo.x..to], .{
-                        .data = .{
-                            .bytes = "    ".*,
-                            .len = 1,
-                        },
-                        .style = styleCpy,
-                    });
-                }
+            for (self.buffer.items[element.layoutInfo.y .. element.layoutInfo.y + element.layoutInfo.height]) |line| a: {
+                if (element.layoutInfo.x >= size.width) break :a;
+                const to = @min(element.layoutInfo.x + element.layoutInfo.width, size.width);
+                @memset(line.items[element.layoutInfo.x..to], .{
+                    .data = .{
+                        .bytes = "    ".*,
+                        .len = 1,
+                    },
+                    .style = styleCpy,
+                });
             }
         }
 
@@ -85,11 +85,19 @@ pub const BackBuffer = struct {
                 };
 
                 for (text.renderedData, 0..) |line, lineIndex| {
-                    for (line, 0..) |char, charIndex| {
-                        try self.writeCharAtPos(allocator, size, .{
-                            .x = basePos.x + @as(u16, @intCast(charIndex)),
+                    const utf8View = try std.unicode.Utf8View.init(line);
+                    var charIt = utf8View.iterator();
+                    var index: usize = 0;
+                    while (charIt.nextCodepointSlice()) |chars| : (index += 1) {
+                        const pos = utils.Pos{
+                            .x = basePos.x + @as(u16, @intCast(index)),
                             .y = basePos.y + @as(u16, @intCast(lineIndex)),
-                        }, char, simpleStyles);
+                        };
+                        if (chars.len == 1) {
+                            try self.writeCharAtPos(allocator, size, pos, chars[0], simpleStyles);
+                        } else {
+                            try self.writeUnicodeAtPos(allocator, size, pos, chars, simpleStyles);
+                        }
                     }
                 }
             },

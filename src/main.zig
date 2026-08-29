@@ -29,27 +29,23 @@ pub const Model = struct {
     }
 };
 
-fn progressBar(allocator: Allocator, percent: f32) !*tui.UIElement {
-    const green = tui.RgbColor.from(0, 232, 93);
-    const red = tui.RgbColor.from(214, 65, 60);
-    const barColor = red.lerp(green, percent);
+pub fn main(init: std.process.Init) !void {
+    var stdoutBuf: [1024]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(init.io, &stdoutBuf);
+    const writer = &stdout.interface;
 
-    var bar = try tui.Text.fromConstText(allocator, "");
-    _ = bar.styles.bg(.{ .Custom = barColor });
+    var model = Model.init(1000);
+    var context = try tui.initTuiLib(Model, init.gpa, init.io, config, &model, writer);
+    defer {
+        model.deinit(init.gpa);
+        context.deinit(writer);
+        init.gpa.destroy(context);
+    }
 
-    var layout = try tui.Layout.fromElementsAndConstraints(
-        allocator,
-        &.{bar},
-        &.{.{
-            .width = .{
-                .Percent = percent,
-            },
-        }},
-        .Horizontal,
-    );
-    _ = layout.styles.border(.Rounded);
+    try context.on("stdin", .{context.terminal}, stdinHandler);
+    try context.on("mouse-btn", .{context}, mouseHandler);
 
-    return layout;
+    try context.render(init.io, renderUI, writer);
 }
 
 fn renderUI(terminal: *tui.Terminal(Model, tui.formatRegisteredEvents(tui.baseEvents))) !*tui.UIElement {
@@ -113,13 +109,34 @@ fn renderUI(terminal: *tui.Terminal(Model, tui.formatRegisteredEvents(tui.baseEv
         &.{
             .{},
             .{
-                .width = .{
-                    .Fill = {},
-                },
+                .width = .{ .Fill = {} },
             },
         },
         .Vertical,
     );
+
+    return layout;
+}
+
+fn progressBar(allocator: Allocator, percent: f32) !*tui.UIElement {
+    const green = tui.RgbColor.from(0, 232, 93);
+    const red = tui.RgbColor.from(214, 65, 60);
+    const barColor = red.lerp(green, percent);
+
+    var bar = try tui.Text.fromConstText(allocator, "");
+    _ = bar.styles.bg(.{ .Custom = barColor });
+
+    var layout = try tui.Layout.fromElementsAndConstraints(
+        allocator,
+        &.{bar},
+        &.{.{
+            .width = .{
+                .Percent = percent,
+            },
+        }},
+        .Horizontal,
+    );
+    _ = layout.styles.border(.Rounded);
 
     return layout;
 }
@@ -130,25 +147,6 @@ fn containsSlice(haystack: []const []const u8, value: []const u8) bool {
     }
 
     return false;
-}
-
-pub fn main(init: std.process.Init) !void {
-    var stdoutBuf: [1024]u8 = undefined;
-    var stdout = std.Io.File.stdout().writer(init.io, &stdoutBuf);
-    const writer = &stdout.interface;
-
-    var model = Model.init(1000);
-    var context = try tui.initTuiLib(Model, init.gpa, init.io, config, &model, writer);
-    defer {
-        model.deinit(init.gpa);
-        context.deinit(writer);
-        init.gpa.destroy(context);
-    }
-
-    try context.on("stdin", .{context.terminal}, stdinHandler);
-    try context.on("mouse-btn", .{context}, mouseHandler);
-
-    try context.render(init.io, renderUI, writer);
 }
 
 fn stdinHandler(

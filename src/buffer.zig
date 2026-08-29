@@ -6,14 +6,16 @@ const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
 const stylesMod = @import("styles.zig");
 
+pub const BufferCharData = struct {
+    bytes: [4]u8,
+    len: u8,
+};
+
 pub const BufferChar = struct {
     const Self = @This();
 
     style: stylesMod.SimpleDataStyle = .{},
-    data: struct {
-        bytes: [4]u8,
-        len: u8,
-    },
+    data: BufferCharData,
 
     pub fn compareTo(self: Self, other: Self) bool {
         if (!std.meta.eql(self.style, other.style)) {

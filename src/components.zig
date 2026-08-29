@@ -100,12 +100,12 @@ pub const Input = struct {
         focused: bool,
     ) !*ui.UIElement {
         const str = if (!isPlaceholder and focused)
-            // try std.fmt.allocPrint(allocator, "{s}{s}", .{ value, "⎸" })
-            try std.fmt.allocPrint(allocator, "{s}{s}", .{ value, "|" })
+            try std.fmt.allocPrint(allocator, "{s}{s}", .{ value, "⎸" })
         else
             value;
 
         var text = try Text.fromConstText(allocator, str);
+        text.id = "inner";
         if (isPlaceholder) {
             _ = text.styles.fg(constants.colors.gray);
         }
