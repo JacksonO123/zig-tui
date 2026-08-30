@@ -105,7 +105,6 @@ pub const Input = struct {
             value;
 
         var text = try Text.fromConstText(allocator, str);
-        text.id = "inner";
         if (isPlaceholder) {
             _ = text.styles.fg(constants.colors.gray);
         }

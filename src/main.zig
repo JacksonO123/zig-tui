@@ -48,12 +48,17 @@ fn renderUI(terminal: *tui.Terminal(Model, tui.formatRegisteredEvents(tui.baseEv
     var absoluteText = try tui.Text.fromConstText(allocator, "absolute text");
     _ = absoluteText.styles.border(.Square).position(.{ .Absolute = .{ .x = 1, .y = 1 } });
 
+    var hLayout = try tui.Layout.fromElements(allocator, &.{
+        text3, absoluteText,
+    }, .Vertical);
+    _ = hLayout.styles.setRelativeAnchor(true);
+
     var afterText = try tui.Text.fromConstText(allocator, "     ");
     _ = afterText.styles.border(.Rounded);
 
     var layout = try tui.Layout.fromElementsAndConstraints(
         allocator,
-        &.{ text1, text2, text3, absoluteText, afterText },
+        &.{ text1, text2, hLayout, afterText },
         &.{ .{}, .{ .height = .Fill } },
         .Vertical,
     );

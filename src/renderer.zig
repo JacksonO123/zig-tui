@@ -75,7 +75,7 @@ pub fn render(
             },
         );
     }
-    try context.backBuffer.renderInBuffer(allocator, el, context.terminalUtils.size);
+    try context.backBuffer.renderInBuffer(allocator, el, context.terminalUtils.size, .{}, .{});
     try writeDiff(allocator, context, context.terminalUtils.size, writer);
 
     try sequences.resetStyles(writer);

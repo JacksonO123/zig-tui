@@ -1,6 +1,15 @@
 pub const Pos = struct {
+    const Self = @This();
+
     x: u16 = 0,
     y: u16 = 0,
+
+    pub fn appendOffset(self: Self, other: Self) Self {
+        return .{
+            .x = self.x + other.x,
+            .y = self.y + other.y,
+        };
+    }
 };
 
 pub const Size = struct {
