@@ -139,7 +139,7 @@ pub fn disableItalicText(writer: *Writer) !void {
 }
 
 pub fn moveCursorUp(
-    context: *RenderContext(anyopaque),
+    context: *RenderContext(anyopaque, void),
     amount: u16,
     writer: *Writer,
 ) !void {
@@ -153,7 +153,7 @@ pub fn moveCursorUp(
 }
 
 pub fn moveCursorDown(
-    context: *RenderContext(anyopaque),
+    context: *RenderContext(anyopaque, void),
     amount: u16,
     writer: *Writer,
 ) !void {

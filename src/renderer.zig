@@ -69,6 +69,10 @@ pub fn render(
             termSizeCopy,
             .{},
             .{},
+            .{
+                .width = termSizeCopy.width,
+                .height = termSizeCopy.height,
+            },
         );
     }
     try context.backBuffer.renderInBuffer(allocator, el, context.terminalUtils.size);
@@ -126,7 +130,8 @@ fn writeDiff(
             try sequences.simulateNewline(context, writer);
         } else {
             switch (context.config.screenType) {
-                .Alternate => {
+                .Alternate => a: {
+                    if (rowIndex + 1 >= size.height) break :a;
                     try sequences.setCursorPosAbsolute(
                         context,
                         @intCast(context.backBuffer.lineLimit + 1),
@@ -136,8 +141,9 @@ fn writeDiff(
                     try sequences.eraseDisplayAfterCursor(writer);
                 },
                 .Main => {
-                    try sequences.setCursorCol(context.terminalUtils.size.width + 1, writer);
+                    try sequences.simulateNewline(context, writer);
                     try sequences.eraseDisplayAfterCursor(writer);
+                    try sequences.moveCursorUp(context, 1, writer);
                 },
             }
         }

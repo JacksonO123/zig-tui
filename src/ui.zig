@@ -178,13 +178,28 @@ pub fn setElementDimensions(
     allocator: Allocator,
     context: *RenderContext(anyopaque, void),
     element: *UIElement,
-    sizeConstraint: utils.Size,
+    sizeConstraintParam: utils.Size,
     constraint: Constraint,
     writePos: utils.Pos,
+    lastRelativeAnchor: ElementLayoutInfo,
 ) !void {
-    var elInfo: ElementLayoutInfo = .{
-        .x = writePos.x,
-        .y = writePos.y,
+    const sizeConstraint: utils.Size = if (element.styles.styles.position == .Relative) .{
+        .width = sizeConstraintParam.width,
+        .height = sizeConstraintParam.height,
+    } else .{
+        .width = lastRelativeAnchor.width,
+        .height = lastRelativeAnchor.height,
+    };
+
+    var elInfo: ElementLayoutInfo = switch (element.styles.styles.position) {
+        .Relative => .{
+            .x = writePos.x,
+            .y = writePos.y,
+        },
+        .Absolute => |translate| .{
+            .x = lastRelativeAnchor.x + translate.x,
+            .y = lastRelativeAnchor.y + translate.y,
+        },
     };
 
     const preAdjust = getPreAdjustment(element.styles);
@@ -248,6 +263,7 @@ pub fn setElementDimensions(
                     var fillWidthIndices: std.ArrayList(usize) = .empty;
                     defer fillWidthIndices.deinit(allocator);
 
+                    const numRelative = countRelativeElements(layoutInfo.elements);
                     var possibleFillWidth = sizeConstraint.width;
 
                     for (layoutInfo.elements, 0..) |elOrNull, index| {
@@ -281,23 +297,26 @@ pub fn setElementDimensions(
                             newSizeConstraint,
                             newElConstraint,
                             innerElPos,
+                            lastRelativeAnchor,
                         );
                         elInfo.width += el.layoutInfo.width;
                         elInfo.height = @max(elInfo.height, el.layoutInfo.height);
 
-                        if (index + 1 < layoutInfo.elements.len) {
+                        if (index + 1 < numRelative) {
                             elInfo.width += element.styles.styles.gap;
                             possibleFillWidth -|= element.styles.styles.gap;
                         }
 
-                        if (layoutConstraint) |cons| {
-                            if (cons.width == .Fill) {
-                                try fillWidthIndices.append(allocator, index);
+                        if (el.styles.styles.position == .Relative) {
+                            if (layoutConstraint) |cons| {
+                                if (cons.width == .Fill) {
+                                    try fillWidthIndices.append(allocator, index);
+                                } else {
+                                    possibleFillWidth -|= el.layoutInfo.width;
+                                }
                             } else {
                                 possibleFillWidth -|= el.layoutInfo.width;
                             }
-                        } else {
-                            possibleFillWidth -|= el.layoutInfo.width;
                         }
                     }
 
@@ -320,6 +339,7 @@ pub fn setElementDimensions(
                     i = 0;
                     for (layoutInfo.elements, 0..) |elOrNull, index| {
                         const el = elOrNull orelse continue;
+                        if (el.styles.styles.position == .Absolute) continue;
 
                         el.layoutInfo.x = elInfo.x + preAdjust.width + widthAcc;
 
@@ -351,7 +371,7 @@ pub fn setElementDimensions(
                         }
 
                         widthAcc += el.layoutInfo.width;
-                        if (index < layoutInfo.elements.len - 1) {
+                        if (index + 1 < numRelative) {
                             widthAcc += element.styles.styles.gap;
                         }
                     }
@@ -360,6 +380,7 @@ pub fn setElementDimensions(
                     var fillHeightIndices: std.ArrayList(usize) = .empty;
                     defer fillHeightIndices.deinit(allocator);
 
+                    const numRelative = countRelativeElements(layoutInfo.elements);
                     var possibleFillHeight = sizeConstraint.height;
 
                     elInfo.height = 0;
@@ -395,23 +416,26 @@ pub fn setElementDimensions(
                             newSizeConstraint,
                             newElConstraint,
                             innerElPos,
+                            lastRelativeAnchor,
                         );
                         elInfo.height += el.layoutInfo.height;
                         elInfo.width = @max(elInfo.width, el.layoutInfo.width);
 
-                        if (index + 1 < layoutInfo.elements.len) {
+                        if (index + 1 < numRelative) {
                             elInfo.height += element.styles.styles.gap;
-                            possibleFillHeight -= element.styles.styles.gap;
+                            possibleFillHeight -|= element.styles.styles.gap;
                         }
 
-                        if (layoutConstraint) |cons| {
-                            if (cons.height == .Fill) {
-                                try fillHeightIndices.append(allocator, index);
+                        if (el.styles.styles.position == .Relative) {
+                            if (layoutConstraint) |cons| {
+                                if (cons.height == .Fill) {
+                                    try fillHeightIndices.append(allocator, index);
+                                } else {
+                                    possibleFillHeight -|= el.layoutInfo.height;
+                                }
                             } else {
-                                possibleFillHeight -= el.layoutInfo.height;
+                                possibleFillHeight -|= el.layoutInfo.height;
                             }
-                        } else {
-                            possibleFillHeight -|= el.layoutInfo.height;
                         }
                     }
 
@@ -434,6 +458,7 @@ pub fn setElementDimensions(
                     i = 0;
                     for (layoutInfo.elements, 0..) |elOrNull, index| {
                         const el = elOrNull orelse continue;
+                        if (el.styles.styles.position == .Absolute) continue;
 
                         el.layoutInfo.y = elInfo.y + preAdjust.height + heightAcc;
 
@@ -460,7 +485,7 @@ pub fn setElementDimensions(
                         }
 
                         heightAcc += el.layoutInfo.height;
-                        if (index < layoutInfo.elements.len - 1) {
+                        if (index + 1 < numRelative) {
                             heightAcc += element.styles.styles.gap;
                         }
                     }
@@ -578,4 +603,17 @@ fn pointInElement(layoutInfo: ElementLayoutInfo, point: utils.Pos) bool {
     const inX = point.x > layoutInfo.x and point.x <= layoutInfo.x + layoutInfo.width;
     const inY = point.y > layoutInfo.y and point.y <= layoutInfo.y + layoutInfo.height;
     return inX and inY;
+}
+
+fn countRelativeElements(elements: []const ?*UIElement) usize {
+    var res: usize = 0;
+
+    for (elements) |elOrNull| {
+        const el = elOrNull orelse continue;
+        if (el.styles.styles.position == .Relative) {
+            res += 1;
+        }
+    }
+
+    return res;
 }

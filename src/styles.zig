@@ -96,6 +96,8 @@ pub const Color = union(enum) {
     Custom: RgbColor,
 };
 
+const PositionTypes = union(enum) { Relative, Absolute: utils.Pos };
+
 pub const StyleConfig = struct {
     border: BorderStylesVariant = .None,
     padding: struct {
@@ -111,6 +113,8 @@ pub const StyleConfig = struct {
     bg: Color = .None,
     gap: u16 = 0,
     wordWrap: bool = false,
+    position: PositionTypes = .Relative,
+    relativeAnchor: bool = false,
 };
 
 pub const Styles = struct {
@@ -211,6 +215,16 @@ pub const Styles = struct {
 
     pub fn wordWrap(self: *Self, wrap: bool) *Self {
         self.styles.wordWrap = wrap;
+        return self;
+    }
+
+    pub fn position(self: *Self, positionType: PositionTypes) *Self {
+        self.styles.position = positionType;
+        return self;
+    }
+
+    pub fn setRelativeAnchor(self: *Self, value: bool) *Self {
+        self.styles.relativeAnchor = value;
         return self;
     }
 };

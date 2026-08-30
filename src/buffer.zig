@@ -62,10 +62,7 @@ pub fn createLine(allocator: Allocator, size: usize) !*BufferLine {
     return line;
 }
 
-const ClearType = enum {
-    New,
-    All,
-};
+const ClearType = enum { New, All };
 
 pub fn prepareLineBuffer(
     allocator: Allocator,
