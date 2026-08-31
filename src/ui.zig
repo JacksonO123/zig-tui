@@ -222,34 +222,7 @@ pub fn setElementDimensions(
             elInfo.width = textRenderer.width;
             elInfo.height = textRenderer.height;
 
-            const maxWidthWithConstraintValue = switch (constraint.width) {
-                .Value, .Percent, .Ratio => true,
-                .Max, .Min, .None, .Fill => false,
-            };
-            const maxHeightWithConstraintValue = switch (constraint.height) {
-                .Value, .Percent, .Ratio => true,
-                .Max, .Min, .None, .Fill => false,
-            };
-
-            const finalElWidth = elInfo.width + preAdjust.width + postAdjust.width;
-            elInfo.width = if (maxWidthWithConstraintValue)
-                @max(finalElWidth, sizeConstraint.width)
-            else
-                finalElWidth;
-
-            if (constraint.width == .Min) {
-                elInfo.width = @max(elInfo.width, constraint.width.Min);
-            }
-
-            const finalElHeight = elInfo.height + preAdjust.height + postAdjust.height;
-            elInfo.height = if (maxHeightWithConstraintValue)
-                @max(finalElHeight, sizeConstraint.height)
-            else
-                finalElHeight;
-
-            if (constraint.height == .Min) {
-                elInfo.height = @max(elInfo.height, constraint.height.Min);
-            }
+            adjustElInfoDimensions(&elInfo, constraint, sizeConstraint, preAdjust, postAdjust);
         },
         .Layout => |layout| {
             elInfo.width += preAdjust.width + postAdjust.width;
@@ -289,7 +262,7 @@ pub fn setElementDimensions(
                                 newConstraint,
                                 cons,
                             };
-                        } else .{ sizeConstraint, constraint };
+                        } else .{ sizeConstraint, Constraint{} };
 
                         const innerElPos = utils.Pos{
                             .x = preAdjust.width,
@@ -305,7 +278,10 @@ pub fn setElementDimensions(
                             lastRelativeAnchor,
                         );
                         elInfo.width += el.layoutInfo.width;
-                        elInfo.height = @max(elInfo.height, el.layoutInfo.height);
+                        elInfo.height = @max(
+                            elInfo.height,
+                            el.layoutInfo.height + preAdjust.height + postAdjust.height,
+                        );
 
                         if (index + 1 < numRelative) {
                             elInfo.width += element.styles.styles.gap;
@@ -438,7 +414,7 @@ pub fn setElementDimensions(
                                 newConstraint,
                                 cons,
                             };
-                        } else .{ sizeConstraint, constraint };
+                        } else .{ sizeConstraint, Constraint{} };
 
                         const innerElPos = utils.Pos{
                             .x = preAdjust.width,
@@ -454,7 +430,10 @@ pub fn setElementDimensions(
                             lastRelativeAnchor,
                         );
                         elInfo.height += el.layoutInfo.height;
-                        elInfo.width = @max(elInfo.width, el.layoutInfo.width);
+                        elInfo.width = @max(
+                            elInfo.width,
+                            el.layoutInfo.width + preAdjust.width + postAdjust.width,
+                        );
 
                         if (index + 1 < numRelative) {
                             elInfo.height += element.styles.styles.gap;
@@ -548,6 +527,8 @@ pub fn setElementDimensions(
                     }
                 },
             }
+
+            adjustElInfoDimensions(&elInfo, constraint, sizeConstraint, preAdjust, postAdjust);
         },
     }
 
@@ -685,4 +666,41 @@ fn countRelativeElements(elements: []const ?*UIElement) usize {
     }
 
     return res;
+}
+
+fn adjustElInfoDimensions(
+    elInfo: *ElementLayoutInfo,
+    constraint: Constraint,
+    sizeConstraint: utils.Size,
+    preAdjust: utils.Size,
+    postAdjust: utils.Size,
+) void {
+    const maxWidthWithConstraintValue = switch (constraint.width) {
+        .Value, .Percent, .Ratio => true,
+        .Max, .Min, .None, .Fill => false,
+    };
+    const maxHeightWithConstraintValue = switch (constraint.height) {
+        .Value, .Percent, .Ratio => true,
+        .Max, .Min, .None, .Fill => false,
+    };
+
+    const finalElWidth = elInfo.width + preAdjust.width + postAdjust.width;
+    elInfo.width = if (maxWidthWithConstraintValue)
+        @max(finalElWidth, sizeConstraint.width)
+    else
+        finalElWidth;
+
+    if (constraint.width == .Min) {
+        elInfo.width = @max(elInfo.width, constraint.width.Min);
+    }
+
+    const finalElHeight = elInfo.height + preAdjust.height + postAdjust.height;
+    elInfo.height = if (maxHeightWithConstraintValue)
+        @max(finalElHeight, sizeConstraint.height)
+    else
+        finalElHeight;
+
+    if (constraint.height == .Min) {
+        elInfo.height = @max(elInfo.height, constraint.height.Min);
+    }
 }
