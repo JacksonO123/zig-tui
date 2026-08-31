@@ -62,10 +62,14 @@ pub inline fn initTuiLib(
     config: configMod.Config,
     model: *ModelType,
     writer: *Writer,
-) !*contextMod.RenderContext(ModelType, eventListeners.formatRegisteredEvents(baseEvents)) {
+    comptime eventExtension: ?[]const eventListeners.EventDescription,
+) !*contextMod.RenderContext(
+    ModelType,
+    eventListeners.formatRegisteredEvents(baseEvents ++ if (eventExtension) |extension| extension else &.{}),
+) {
     const RenderContextType = contextMod.RenderContext(
         ModelType,
-        eventListeners.formatRegisteredEvents(baseEvents),
+        eventListeners.formatRegisteredEvents(baseEvents ++ if (eventExtension) |extension| extension else &.{}),
     );
     const ptr = try gpa.create(RenderContextType);
     ptr.* = try RenderContextType.init(

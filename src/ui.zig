@@ -63,7 +63,7 @@ const ConstraintValues = union(ConstraintTypes) {
         numerator: u16,
         denominator: u16,
     },
-    Percent: f32,
+    Percent: f64,
     Value: u16,
     Min: u16,
     Max: u16,
@@ -630,14 +630,26 @@ pub fn getIdsContainingPoint(
     point: utils.Pos,
     ids: *std.ArrayList([]const u8),
 ) !void {
+    return getIdsContainingPointImpl(allocator, element, point, ids, .{});
+}
+
+pub fn getIdsContainingPointImpl(
+    allocator: Allocator,
+    element: *UIElement,
+    point: utils.Pos,
+    ids: *std.ArrayList([]const u8),
+    posAcc: utils.Pos,
+) !void {
+    const newPosAcc = posAcc.appendOffset(element.layoutInfo.offsetToPos());
+
     switch (element.variant) {
         .Text => a: {
-            if (!pointInElement(element.layoutInfo, point)) break :a;
+            if (!pointInElement(element.layoutInfo, newPosAcc, point)) break :a;
             const id = element.id orelse break :a;
             try ids.append(allocator, id);
         },
         .Layout => |layout| a: {
-            if (!pointInElement(element.layoutInfo, point)) break :a;
+            if (!pointInElement(element.layoutInfo, newPosAcc, point)) break :a;
 
             if (element.id) |id| {
                 try ids.append(allocator, id);
@@ -650,15 +662,15 @@ pub fn getIdsContainingPoint(
 
             for (elements) |elOrNull| {
                 const el = elOrNull orelse continue;
-                try getIdsContainingPoint(allocator, el, point, ids);
+                try getIdsContainingPointImpl(allocator, el, point, ids, newPosAcc);
             }
         },
     }
 }
 
-fn pointInElement(layoutInfo: ElementLayoutInfo, point: utils.Pos) bool {
-    const inX = point.x > layoutInfo.xOffset and point.x <= layoutInfo.xOffset + layoutInfo.width;
-    const inY = point.y > layoutInfo.yOffset and point.y <= layoutInfo.yOffset + layoutInfo.height;
+fn pointInElement(layoutInfo: ElementLayoutInfo, posAcc: utils.Pos, point: utils.Pos) bool {
+    const inX = point.x > posAcc.x and point.x <= posAcc.x + layoutInfo.width;
+    const inY = point.y > posAcc.y and point.y <= posAcc.y + layoutInfo.height;
     return inX and inY;
 }
 
