@@ -35,6 +35,9 @@ pub const keys = constants.keys;
 pub const RgbColor = styles.RgbColor;
 pub const Pos = utils.Pos;
 pub const formatRegisteredEvents = eventListeners.formatRegisteredEvents;
+pub const indexOfStringInArray = utils.indexOfStringInArray;
+pub const removeFromStringArrayList = utils.removeFromStringArrayList;
+pub const stringArrContains = utils.stringArrContains;
 
 // ui
 pub const ElementLayoutInfo = ui.ElementLayoutInfo;
@@ -49,7 +52,7 @@ const globalState = &@import("global.zig").globalState;
 pub const baseEvents: []const eventListeners.EventDescription = &.{
     .{ .name = "stdin", .args = eventTypes.StdinEvent },
     .{ .name = "scroll", .args = eventTypes.ScrollEventWrapper },
-    .{ .name = "mouse-btn", .args = eventTypes.MouseButtonEventWrapper },
+    .{ .name = "click", .args = eventTypes.MouseButtonEventWrapper },
 };
 
 pub inline fn initTuiLib(

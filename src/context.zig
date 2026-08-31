@@ -185,7 +185,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
                                         .y = eventData.event.y,
                                         .pressed = eventData.event.pressed,
                                     };
-                                    try self.emit("mouse-btn", .{event});
+                                    try self.emit("click", .{event});
                                 },
                             }
 

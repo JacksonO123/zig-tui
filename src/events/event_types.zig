@@ -29,10 +29,19 @@ pub const MouseEventButton = union(enum) {
 };
 
 pub const MouseButtonEvent = struct {
+    const Self = @This();
+
     button: MouseEventButton,
     x: u16,
     y: u16,
     pressed: bool,
+
+    pub fn toPos(self: Self) utils.Pos {
+        return .{
+            .x = self.x,
+            .y = self.y,
+        };
+    }
 };
 
 pub const MouseButtonEventWrapper = struct { MouseButtonEvent };

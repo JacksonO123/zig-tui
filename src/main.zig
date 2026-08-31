@@ -8,12 +8,18 @@ const config: tui.Config = .{};
 pub const Model = struct {
     const Self = @This();
 
+    leftMouseDownIds: std.ArrayList([]const u8) = .empty,
+    leftMouseUpIds: std.ArrayList([]const u8) = .empty,
+    leftMousePressedIds: std.ArrayList([]const u8) = .empty,
+
     pub fn init() Self {
         return .{};
     }
 
-    pub fn deinit(self: Self) void {
-        _ = self;
+    pub fn deinit(self: *Self, gpa: Allocator) void {
+        self.leftMouseDownIds.deinit(gpa);
+        self.leftMouseUpIds.deinit(gpa);
+        self.leftMousePressedIds.deinit(gpa);
     }
 };
 
@@ -25,10 +31,12 @@ pub fn main(init: std.process.Init) !void {
     var model = Model.init();
     var context = try tui.initTuiLib(Model, init.gpa, init.io, config, &model, writer);
     defer {
-        model.deinit();
+        model.deinit(init.gpa);
         context.deinit(writer);
         init.gpa.destroy(context);
     }
+
+    try context.on("click", .{context}, clickHandler);
 
     try context.render(init.io, renderUI, writer);
 }
@@ -36,33 +44,60 @@ pub fn main(init: std.process.Init) !void {
 fn renderUI(terminal: *tui.Terminal(Model, tui.formatRegisteredEvents(tui.baseEvents))) !*tui.UIElement {
     const allocator = terminal.renderAlloc;
 
-    var text1 = try tui.Text.fromConstText(allocator, "     ");
-    _ = text1.styles.border(.Rounded);
+    var btn = try tui.Button.create(allocator, "show-btn", "Show");
+    _ = btn.styles.border(.Rounded).bg(.Magenta).paddingX(4);
 
-    var text2 = try tui.Text.fromConstText(allocator, "     ");
-    _ = text2.styles.border(.Rounded);
+    const shownText = if (tui.stringArrContains(terminal.model.leftMousePressedIds.items, "show-btn"))
+        try tui.Text.fromConstText(allocator, "i am shown")
+    else
+        null;
 
-    var text3 = try tui.Text.fromConstText(allocator, "this is a string\non multiple lines\nthat is on multiple lines");
-    _ = text3.styles.border(.Rounded).bg(.Blue);
-
-    var absoluteText = try tui.Text.fromConstText(allocator, "absolute text");
-    _ = absoluteText.styles.border(.Square).position(.{ .Absolute = .{ .x = 1, .y = 1 } });
-
-    var hLayout = try tui.Layout.fromElements(allocator, &.{
-        text3, absoluteText,
-    }, .Vertical);
-    _ = hLayout.styles.setRelativeAnchor(true);
-
-    var afterText = try tui.Text.fromConstText(allocator, "     ");
-    _ = afterText.styles.border(.Rounded);
-
-    var layout = try tui.Layout.fromElementsAndConstraints(
+    const layout = try tui.Layout.fromElements(
         allocator,
-        &.{ text1, text2, hLayout, afterText },
-        &.{ .{}, .{ .height = .Fill } },
-        .Vertical,
+        &.{ btn, shownText },
+        .Horizontal,
     );
-    _ = layout.styles.gap(2);
 
     return layout;
+}
+
+fn clickHandler(
+    context: *tui.RenderContext(Model, tui.formatRegisteredEvents(tui.baseEvents)),
+    data: tui.events.MouseButtonEvent,
+) !void {
+    switch (data.button) {
+        .Left => a: {
+            if (data.pressed) {
+                context.model.leftMouseDownIds.clearRetainingCapacity();
+
+                const rendered = context.rendered orelse break :a;
+                try tui.getIdsContainingPoint(
+                    context.gpa,
+                    rendered,
+                    data.toPos(),
+                    &context.model.leftMouseDownIds,
+                );
+            } else {
+                context.model.leftMouseUpIds.clearRetainingCapacity();
+                context.model.leftMousePressedIds.clearRetainingCapacity();
+
+                const rendered = context.rendered orelse break :a;
+                try tui.getIdsContainingPoint(
+                    context.gpa,
+                    rendered,
+                    data.toPos(),
+                    &context.model.leftMouseUpIds,
+                );
+
+                for (context.model.leftMouseUpIds.items) |upId| {
+                    if (tui.stringArrContains(context.model.leftMouseDownIds.items, upId)) {
+                        try context.model.leftMousePressedIds.append(context.gpa, upId);
+                    }
+                }
+            }
+
+            context.terminal.stateChanged();
+        },
+        else => {},
+    }
 }

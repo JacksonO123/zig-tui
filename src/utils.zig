@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const Pos = struct {
     const Self = @This();
 
@@ -19,4 +21,21 @@ pub const Size = struct {
 
 pub fn lerp(a: i64, b: i64, t: f64) i64 {
     return a + @as(i64, @intFromFloat(@as(f64, @floatFromInt(b - a)) * t));
+}
+
+pub fn indexOfStringInArray(stringArr: []const []const u8, value: []const u8) ?usize {
+    for (stringArr, 0..) |string, index| {
+        if (std.mem.eql(u8, string, value)) return index;
+    }
+
+    return null;
+}
+
+pub fn stringArrContains(stringArr: []const []const u8, value: []const u8) bool {
+    return indexOfStringInArray(stringArr, value) != null;
+}
+
+pub fn removeFromStringArrayList(list: *std.ArrayList([]const u8), value: []const u8) void {
+    const index = indexOfStringInArray(list.items, value);
+    list.swapRemove(index);
 }
