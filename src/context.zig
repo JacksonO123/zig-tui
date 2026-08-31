@@ -60,6 +60,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
 
             const termUtils = try gpa.create(terminalUtils.TerminalUtils);
             termUtils.* = try terminalUtils.TerminalUtils.init(
+                io,
                 config,
                 logger,
                 writer,
@@ -98,12 +99,15 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
             self: *Self,
             writer: *Writer,
         ) void {
-            self.gpa.destroy(self.terminalUtils);
             self.backBuffer.deinit(self.gpa);
             self.frontBuffer.deinit(self.gpa);
-            self.terminalUtils.deinit(self.config, writer);
+
             self.eventListeners.deinit();
+            self.terminalUtils.deinit(self.config, writer);
+            self.logger.deinit();
+
             self.gpa.destroy(self.eventListeners);
+            self.gpa.destroy(self.terminalUtils);
             self.gpa.destroy(self.logger);
             self.gpa.destroy(self.terminal);
         }
@@ -139,7 +143,7 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
                 globalState.needsRerender = false;
 
                 if (pollData.includes(.Resize)) {
-                    const size = try terminalUtils.getTermSize(self.config);
+                    const size = try terminalUtils.getTermSize(io, self.config);
                     self.terminalUtils.onTerminalResize(self.config, &self.state, size);
                     try renderer.handleRender(ModelType, RegisterEvents, self.gpa, @ptrCast(self), renderUI, writer);
                 }

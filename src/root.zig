@@ -2,8 +2,6 @@ const std = @import("std");
 const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
 
-const c = @import("c");
-
 const components = @import("components.zig");
 const configMod = @import("config.zig");
 const constants = @import("constants.zig");

@@ -6,14 +6,13 @@ const builtin = @import("builtin");
 const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
 const logMod = @import("logger.zig");
+const platform = @import("platform.zig");
 const sequences = @import("sequences.zig");
 const types = @import("types.zig");
 const utils = @import("utils.zig");
 const eventListeners = @import("events/event_listeners.zig");
 
 const globalState = &@import("global.zig").globalState;
-
-var terminalState: ?std.posix.termios = null;
 
 const PollEvents = enum(u8) {
     Resize = 0b1,
@@ -72,6 +71,7 @@ pub fn waitForSkip(io: std.Io, allowSkip: bool) !void {
 pub const TerminalUtils = struct {
     const Self = @This();
 
+    io: std.Io,
     size: utils.Size,
     logger: *logMod.Logger,
     eventArena: std.heap.ArenaAllocator,
@@ -79,6 +79,7 @@ pub const TerminalUtils = struct {
     cursorPos: utils.Pos,
 
     pub fn init(
+        io: std.Io,
         config: configMod.Config,
         logger: *logMod.Logger,
         writer: *Writer,
@@ -86,16 +87,17 @@ pub const TerminalUtils = struct {
         const eventArena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         const renderArena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 
-        const size = try getTermSize(config);
+        const size = try getTermSize(io, config);
         if (contextMod.debugConfig.setBehavior) {
-            try setTermBehavior(config, writer);
+            try setTermBehavior(io, config, writer);
         }
 
-        initResizeEvent();
+        try platform.startResizeWatch(io);
 
-        const cursorPos = try getCursorPosition(writer);
+        const cursorPos = try getCursorPosition(io, writer);
 
         return .{
+            .io = io,
             .size = size,
             .logger = logger,
             .eventArena = eventArena,
@@ -105,25 +107,11 @@ pub const TerminalUtils = struct {
     }
 
     pub fn deinit(self: *Self, config: configMod.Config, writer: *Writer) void {
+        platform.stopResizeWatch();
+
         self.eventArena.deinit();
         self.renderArena.deinit();
-        deinitTermBehavior(config, writer) catch {};
-    }
-
-    fn initResizeEvent() void {
-        var action: std.posix.Sigaction = .{
-            .handler = .{ .handler = sigWinchHandler },
-            .mask = std.posix.sigemptyset(),
-            .flags = 0,
-        };
-        std.posix.sigaction(std.posix.SIG.WINCH, &action, null);
-    }
-
-    fn sigWinchHandler(sig: std.c.SIG) align(1) callconv(.c) void {
-        _ = sig;
-        var threadedIo = std.Io.Threaded.init_single_threaded;
-        globalState.eventUtil.flags.resize = true;
-        globalState.eventUtil.event.set(threadedIo.io());
+        deinitTermBehavior(self.io, config, writer) catch {};
     }
 
     pub fn pollEvents(self: *Self, io: std.Io, allowSkip: bool) !struct { EventData, []const u8 } {
@@ -199,7 +187,7 @@ pub const TerminalUtils = struct {
 
         _ = self.renderArena.reset(.retain_capacity);
 
-        const cursorPos = getCursorPosition(writer) catch |err| {
+        const cursorPos = getCursorPosition(self.io, writer) catch |err| {
             if (err == error.InvalidResponse) {
                 globalState.needsRerender = true;
                 return false;
@@ -212,53 +200,8 @@ pub const TerminalUtils = struct {
     }
 };
 
-pub fn enableRawMode() !void {
-    const stdoutHandle = std.Io.File.stdout().handle;
-
-    const original = try std.posix.tcgetattr(stdoutHandle);
-    terminalState = original;
-
-    var raw = original;
-    raw.iflag.BRKINT = false;
-    raw.iflag.ICRNL = false;
-    raw.iflag.INPCK = false;
-    raw.iflag.ISTRIP = false;
-    raw.iflag.IXON = false;
-
-    raw.lflag.ECHO = false;
-    raw.lflag.ICANON = false;
-    raw.lflag.IEXTEN = false;
-    raw.lflag.ISIG = false;
-
-    raw.oflag.OPOST = false;
-
-    raw.cc[@intFromEnum(std.posix.V.MIN)] = 1;
-    raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
-
-    try std.posix.tcsetattr(stdoutHandle, .FLUSH, raw);
-}
-
-pub fn disableRawMode() void {
-    const stdinHandle = std.Io.File.stdin().handle;
-
-    const orig = terminalState orelse return;
-    std.posix.tcsetattr(stdinHandle, .FLUSH, orig) catch {};
-
-    terminalState = null;
-}
-
-pub fn getTermSize(config: configMod.Config) !utils.Size {
-    var winSize: std.posix.winsize = undefined;
-    const fd = std.Io.File.stdout().handle;
-    const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winSize));
-    if (std.posix.errno(err) != .SUCCESS) {
-        return error.FailedToGetTerminalSize;
-    }
-
-    return processTerminalSize(config, .{
-        .width = winSize.col,
-        .height = winSize.row,
-    });
+pub fn getTermSize(io: std.Io, config: configMod.Config) !utils.Size {
+    return processTerminalSize(config, try platform.getTerminalSize(io));
 }
 
 fn processTerminalSize(config: configMod.Config, size: utils.Size) utils.Size {
@@ -272,12 +215,13 @@ pub fn calculateRightPadding(config: configMod.Config) u16 {
     return config.rightPadding orelse @as(u16, if (config.screenType == .Main) 1 else 0);
 }
 
-fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
+fn setTermBehavior(io: std.Io, config: configMod.Config, writer: *Writer) !void {
+    try platform.enterRawMode(io);
+
     if (config.screenType == .Alternate) {
         try sequences.enableAlternateScreen(writer);
     }
 
-    try enableRawMode();
     try sequences.hideCursor(writer);
 
     if (config.screenType == .Main) {
@@ -289,26 +233,24 @@ fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
     try writer.flush();
 }
 
-fn deinitTermBehavior(config: configMod.Config, writer: *Writer) !void {
+fn deinitTermBehavior(io: std.Io, config: configMod.Config, writer: *Writer) !void {
     if (config.screenType == .Main) {
         try sequences.enableAutoWrap(writer);
     }
 
     try sequences.showCursor(writer);
-    disableRawMode();
+    try sequences.disableMouseReporting(writer);
 
     if (config.screenType == .Alternate) {
         try sequences.disableAlternateScreen(writer);
     }
 
-    try sequences.disableMouseReporting(writer);
-
     try writer.flush();
+
+    platform.exitRawMode(io);
 }
 
-fn getCursorPosition(writer: *Writer) !utils.Pos {
-    const stdinHandle = std.Io.File.stdin().handle;
-
+fn getCursorPosition(io: std.Io, writer: *Writer) !utils.Pos {
     try writer.writeAll("\x1b[6n");
     try writer.flush();
 
@@ -316,7 +258,8 @@ fn getCursorPosition(writer: *Writer) !utils.Pos {
     var index: usize = 0;
 
     while (index < buf.len) {
-        const amount = try std.posix.read(stdinHandle, buf[index .. index + 1]);
+        var buffers = [1][]u8{buf[index .. index + 1]};
+        const amount = try std.Io.File.stdin().readStreaming(io, &buffers);
         if (amount == 0) return error.UnexpectedEOF;
         if (buf[index] == 'R') {
             index += 1;
