@@ -7,6 +7,7 @@ const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const utils = @import("utils.zig");
+const errors = @import("errors.zig");
 
 pub const ElementLayoutInfo = struct {
     const Self = @This();
@@ -103,7 +104,11 @@ const TextRenderUtil = struct {
         };
     }
 
-    pub fn render(self: *Self, allocator: Allocator, text: []const u8) !void {
+    pub fn render(
+        self: *Self,
+        allocator: Allocator,
+        text: []const u8,
+    ) (errors.InvalidUtf8 || Allocator.Error)!void {
         const utf8View = try std.unicode.Utf8View.init(text);
         var charIt = utf8View.iterator();
 
@@ -190,7 +195,7 @@ pub fn setElementDimensions(
     constraint: Constraint,
     writePosOffsetParam: utils.Pos,
     lastRelativeAnchor: ElementLayoutInfo,
-) anyerror!void {
+) errors.SetElementDimensionsError!void {
     const writePosOffset: utils.Pos = switch (element.styles.styles.position) {
         .Relative => writePosOffsetParam,
         .Absolute => |translate| .{
@@ -440,7 +445,7 @@ fn setLayoutDimensions(
     preAdjust: utils.Size,
     postAdjust: utils.Size,
     lastRelativeAnchor: ElementLayoutInfo,
-) !void {
+) errors.SetElementDimensionsError!void {
     var fillSizeIndices: std.ArrayList(usize) = .empty;
     defer fillSizeIndices.deinit(allocator);
 

@@ -10,6 +10,7 @@ const sequences = @import("sequences.zig");
 const types = @import("types.zig");
 const utils = @import("utils.zig");
 const eventListeners = @import("events/event_listeners.zig");
+const errors = @import("errors.zig");
 
 const globalState = &@import("global.zig").globalState;
 
@@ -200,7 +201,7 @@ pub const TerminalUtils = struct {
         _ = self.renderArena.reset(.retain_capacity);
 
         const cursorPos = getCursorPosition(writer) catch |err| {
-            if (err == error.InvalidResponse) {
+            if (err == errors.GetCursorPosError.InvalidResponse) {
                 globalState.needsRerender = true;
                 return false;
             }
@@ -247,12 +248,12 @@ pub fn disableRawMode() void {
     terminalState = null;
 }
 
-pub fn getTermSize(config: configMod.Config) !utils.Size {
+pub fn getTermSize(config: configMod.Config) errors.GetTermSizeError!utils.Size {
     var winSize: std.posix.winsize = undefined;
     const fd = std.Io.File.stdout().handle;
     const err = std.posix.system.ioctl(fd, std.posix.T.IOCGWINSZ, @intFromPtr(&winSize));
     if (std.posix.errno(err) != .SUCCESS) {
-        return error.FailedToGetTerminalSize;
+        return errors.GetTermSizeError.FailedToGetSize;
     }
 
     return processTerminalSize(config, .{
@@ -306,7 +307,7 @@ fn deinitTermBehavior(config: configMod.Config, writer: *Writer) !void {
     try writer.flush();
 }
 
-fn getCursorPosition(writer: *Writer) !utils.Pos {
+fn getCursorPosition(writer: *Writer) errors.GetCursorPosError!utils.Pos {
     const stdinHandle = std.Io.File.stdin().handle;
 
     try writer.writeAll("\x1b[6n");
@@ -317,7 +318,7 @@ fn getCursorPosition(writer: *Writer) !utils.Pos {
 
     while (index < buf.len) {
         const amount = try std.posix.read(stdinHandle, buf[index .. index + 1]);
-        if (amount == 0) return error.UnexpectedEOF;
+        if (amount == 0) return errors.GetCursorPosError.UnexpectedEOF;
         if (buf[index] == 'R') {
             index += 1;
             break;
@@ -328,17 +329,21 @@ fn getCursorPosition(writer: *Writer) !utils.Pos {
     const res = buf[0..index];
 
     if (res.len < 2 or res.len < 6 or res[0] != '\x1b' or res[1] != '[') {
-        return error.InvalidResponse;
+        return errors.GetCursorPosError.InvalidResponse;
     }
 
     const data = res[2 .. res.len - 1];
     var split = std.mem.splitScalar(u8, data, ';');
 
-    const rowStr = split.next() orelse return error.InvalidResponse;
-    const colStr = split.next() orelse return error.InvalidResponse;
+    const rowStr = split.next() orelse return errors.GetCursorPosError.InvalidResponse;
+    const colStr = split.next() orelse return errors.GetCursorPosError.InvalidResponse;
 
-    const row = std.fmt.parseInt(u16, rowStr, 10) catch return error.InvalidResponse;
-    const col = std.fmt.parseInt(u16, colStr, 10) catch return error.InvalidResponse;
+    const row = std.fmt.parseInt(u16, rowStr, 10) catch {
+        return errors.GetCursorPosError.InvalidResponse;
+    };
+    const col = std.fmt.parseInt(u16, colStr, 10) catch {
+        return errors.GetCursorPosError.InvalidResponse;
+    };
 
     return utils.Pos{ .y = row, .x = col };
 }
