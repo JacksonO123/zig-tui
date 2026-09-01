@@ -190,7 +190,7 @@ pub fn setElementDimensions(
     constraint: Constraint,
     writePosOffsetParam: utils.Pos,
     lastRelativeAnchor: ElementLayoutInfo,
-) !void {
+) anyerror!void {
     const writePosOffset: utils.Pos = switch (element.styles.styles.position) {
         .Relative => writePosOffsetParam,
         .Absolute => |translate| .{
@@ -228,299 +228,30 @@ pub fn setElementDimensions(
             elInfo.height += preAdjust.height + postAdjust.height;
 
             switch (layout) {
-                .Horizontal => |layoutInfo| {
-                    var fillWidthIndices: std.ArrayList(usize) = .empty;
-                    defer fillWidthIndices.deinit(allocator);
-
-                    var absoluteElIndices: std.ArrayList(usize) = .empty;
-                    defer absoluteElIndices.deinit(allocator);
-
-                    const numRelative = countRelativeElements(layoutInfo.elements);
-                    var possibleFillWidth = sizeConstraint.width;
-
-                    for (layoutInfo.elements, 0..) |elOrNull, index| {
-                        const el = elOrNull orelse continue;
-
-                        if (el.styles.styles.position == .Absolute) {
-                            try absoluteElIndices.append(allocator, index);
-                            continue;
-                        }
-
-                        const layoutConstraint = layoutInfo.getConstraint(index);
-                        const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
-                            var newConstraint = getSizeConstraint(
-                                sizeConstraint,
-                                cons,
-                                null,
-                                null,
-                            );
-                            newConstraint.width -|= preAdjust.width + postAdjust.width;
-                            newConstraint.height -|= preAdjust.height + postAdjust.height;
-
-                            break :a .{
-                                newConstraint,
-                                cons,
-                            };
-                        } else .{ sizeConstraint, Constraint{} };
-
-                        const innerElPos = utils.Pos{
-                            .x = preAdjust.width,
-                            .y = preAdjust.height,
-                        };
-                        try setElementDimensions(
-                            allocator,
-                            el,
-                            newSizeConstraint,
-                            newElConstraint,
-                            innerElPos,
-                            lastRelativeAnchor,
-                        );
-                        elInfo.width += el.layoutInfo.width;
-                        elInfo.height = @max(
-                            elInfo.height,
-                            el.layoutInfo.height + preAdjust.height + postAdjust.height,
-                        );
-
-                        if (index + 1 < numRelative) {
-                            elInfo.width += element.styles.styles.gap;
-                            possibleFillWidth -|= element.styles.styles.gap;
-                        }
-
-                        if (layoutConstraint) |cons| {
-                            if (cons.width == .Fill) {
-                                try fillWidthIndices.append(allocator, index);
-                            } else {
-                                possibleFillWidth -|= el.layoutInfo.width;
-                            }
-                        } else {
-                            possibleFillWidth -|= el.layoutInfo.width;
-                        }
-                    }
-
-                    const newRelativeAnchor: ElementLayoutInfo = if (element.styles.styles.relativeAnchor)
-                        elInfo
-                    else
-                        lastRelativeAnchor;
-
-                    const absoluteSizeConstraint = utils.Size{
-                        .width = newRelativeAnchor.width,
-                        .height = newRelativeAnchor.height,
-                    };
-
-                    for (absoluteElIndices.items) |index| {
-                        const elOrNull = layoutInfo.elements[index];
-                        const el = elOrNull orelse continue;
-                        try setElementDimensions(
-                            allocator,
-                            el,
-                            absoluteSizeConstraint,
-                            constraint,
-                            .{},
-                            newRelativeAnchor,
-                        );
-                    }
-
-                    var elWidths = try allocator.alloc(u16, fillWidthIndices.items.len);
-                    defer allocator.free(elWidths);
-
-                    var fillItemCount = fillWidthIndices.items.len;
-                    var remainingWidthBudget = possibleFillWidth;
-                    var i: usize = 0;
-                    while (fillItemCount > 0) : ({
-                        i += 1;
-                        fillItemCount -= 1;
-                    }) {
-                        const amount = remainingWidthBudget / @as(u16, @intCast(fillItemCount));
-                        elWidths[i] = amount;
-                        remainingWidthBudget -= amount;
-                    }
-
-                    var widthAcc: u16 = 0;
-                    i = 0;
-                    for (layoutInfo.elements, 0..) |elOrNull, index| {
-                        const el = elOrNull orelse continue;
-                        if (el.styles.styles.position == .Absolute) continue;
-
-                        el.layoutInfo.xOffset = elInfo.xOffset + preAdjust.width + widthAcc;
-
-                        const layoutConstraint = layoutInfo.getConstraint(index);
-                        if (layoutConstraint) |cons| {
-                            const elPreAdjust = getPreAdjustment(el.styles);
-                            const elPostAdjust = getPostAdjustment(el.styles);
-
-                            if (cons.width == .Fill) {
-                                el.layoutInfo.width = @max(
-                                    elWidths[i],
-                                    elPreAdjust.width + elPostAdjust.width,
-                                );
-                                trimTextElContentToWidth(
-                                    el,
-                                    elWidths[i] -| (elPreAdjust.width + elPostAdjust.width),
-                                );
-
-                                i += 1;
-                            }
-
-                            if (cons.height == .Fill) {
-                                el.layoutInfo.height = @max(
-                                    el.layoutInfo.height,
-                                    elPreAdjust.height + elPostAdjust.height,
-                                    sizeConstraint.height,
-                                );
-                            }
-                        }
-
-                        widthAcc += el.layoutInfo.width;
-                        if (index + 1 < numRelative) {
-                            widthAcc += element.styles.styles.gap;
-                        }
-                    }
-                },
-                .Vertical => |layoutInfo| {
-                    var fillHeightIndices: std.ArrayList(usize) = .empty;
-                    defer fillHeightIndices.deinit(allocator);
-
-                    var absoluteElIndices: std.ArrayList(usize) = .empty;
-                    defer absoluteElIndices.deinit(allocator);
-
-                    const numRelative = countRelativeElements(layoutInfo.elements);
-                    var possibleFillHeight = sizeConstraint.height;
-
-                    elInfo.height = 0;
-
-                    for (layoutInfo.elements, 0..) |elOrNull, index| {
-                        const el = elOrNull orelse continue;
-
-                        if (el.styles.styles.position == .Absolute) {
-                            try absoluteElIndices.append(allocator, index);
-                            continue;
-                        }
-
-                        const layoutConstraint = layoutInfo.getConstraint(index);
-                        const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
-                            var newConstraint = getSizeConstraint(
-                                sizeConstraint,
-                                cons,
-                                null,
-                                null,
-                            );
-                            newConstraint.width -|= preAdjust.width + postAdjust.width;
-                            newConstraint.height -|= preAdjust.height + postAdjust.height;
-
-                            break :a .{
-                                newConstraint,
-                                cons,
-                            };
-                        } else .{ sizeConstraint, Constraint{} };
-
-                        const innerElPos = utils.Pos{
-                            .x = preAdjust.width,
-                            .y = preAdjust.height,
-                        };
-                        try setElementDimensions(
-                            allocator,
-                            el,
-                            newSizeConstraint,
-                            newElConstraint,
-                            innerElPos,
-                            lastRelativeAnchor,
-                        );
-                        elInfo.height += el.layoutInfo.height;
-                        elInfo.width = @max(
-                            elInfo.width,
-                            el.layoutInfo.width + preAdjust.width + postAdjust.width,
-                        );
-
-                        if (index + 1 < numRelative) {
-                            elInfo.height += element.styles.styles.gap;
-                            possibleFillHeight -|= element.styles.styles.gap;
-                        }
-
-                        if (layoutConstraint) |cons| {
-                            if (cons.height == .Fill) {
-                                try fillHeightIndices.append(allocator, index);
-                            } else {
-                                possibleFillHeight -|= el.layoutInfo.height;
-                            }
-                        } else {
-                            possibleFillHeight -|= el.layoutInfo.height;
-                        }
-                    }
-
-                    const newRelativeAnchor: ElementLayoutInfo = if (element.styles.styles.relativeAnchor)
-                        elInfo
-                    else
-                        lastRelativeAnchor;
-
-                    const absoluteSizeConstraint = utils.Size{
-                        .width = newRelativeAnchor.width,
-                        .height = newRelativeAnchor.height,
-                    };
-
-                    for (absoluteElIndices.items) |index| {
-                        const elOrNull = layoutInfo.elements[index];
-                        const el = elOrNull orelse continue;
-                        try setElementDimensions(
-                            allocator,
-                            el,
-                            absoluteSizeConstraint,
-                            constraint,
-                            .{},
-                            newRelativeAnchor,
-                        );
-                    }
-
-                    var elHeights = try allocator.alloc(u16, fillHeightIndices.items.len);
-                    defer allocator.free(elHeights);
-
-                    var fillItemCount = fillHeightIndices.items.len;
-                    var remainingHeightBudget = possibleFillHeight;
-                    var i: usize = 0;
-                    while (fillItemCount > 0) : ({
-                        i += 1;
-                        fillItemCount -= 1;
-                    }) {
-                        const amount = remainingHeightBudget / @as(u16, @intCast(fillItemCount));
-                        elHeights[i] = amount;
-                        remainingHeightBudget -= amount;
-                    }
-
-                    var heightAcc: u16 = 0;
-                    i = 0;
-                    for (layoutInfo.elements, 0..) |elOrNull, index| {
-                        const el = elOrNull orelse continue;
-                        if (el.styles.styles.position == .Absolute) continue;
-
-                        el.layoutInfo.yOffset = elInfo.yOffset + preAdjust.height + heightAcc;
-
-                        const layoutConstraint = layoutInfo.getConstraint(index);
-                        if (layoutConstraint) |cons| {
-                            const elPreAdjust = getPreAdjustment(el.styles);
-                            const elPostAdjust = getPostAdjustment(el.styles);
-
-                            if (cons.height == .Fill) {
-                                el.layoutInfo.height = @max(
-                                    elHeights[i],
-                                    elPreAdjust.height + elPostAdjust.height,
-                                );
-                                i += 1;
-                            }
-
-                            if (cons.width == .Fill) {
-                                el.layoutInfo.width = @max(
-                                    el.layoutInfo.width,
-                                    elPreAdjust.width + elPostAdjust.width,
-                                    sizeConstraint.width,
-                                );
-                            }
-                        }
-
-                        heightAcc += el.layoutInfo.height;
-                        if (index + 1 < numRelative) {
-                            heightAcc += element.styles.styles.gap;
-                        }
-                    }
-                },
+                .Horizontal => |layoutInfo| try setLayoutDimensions(
+                    allocator,
+                    .Horizontal,
+                    element,
+                    &elInfo,
+                    layoutInfo,
+                    constraint,
+                    sizeConstraint,
+                    preAdjust,
+                    postAdjust,
+                    lastRelativeAnchor,
+                ),
+                .Vertical => |layoutInfo| try setLayoutDimensions(
+                    allocator,
+                    .Vertical,
+                    element,
+                    &elInfo,
+                    layoutInfo,
+                    constraint,
+                    sizeConstraint,
+                    preAdjust,
+                    postAdjust,
+                    lastRelativeAnchor,
+                ),
             }
 
             adjustElInfoDimensions(&elInfo, constraint, sizeConstraint);
@@ -695,5 +426,234 @@ fn adjustElInfoDimensions(
 
     if (constraint.height == .Min) {
         elInfo.height = @max(elInfo.height, constraint.height.Min);
+    }
+}
+
+fn setLayoutDimensions(
+    allocator: Allocator,
+    comptime layoutType: components.LayoutTypes,
+    element: *UIElement,
+    elInfo: *ElementLayoutInfo,
+    layoutInfo: components.LayoutUtil,
+    constraint: Constraint,
+    sizeConstraint: utils.Size,
+    preAdjust: utils.Size,
+    postAdjust: utils.Size,
+    lastRelativeAnchor: ElementLayoutInfo,
+) !void {
+    var fillSizeIndices: std.ArrayList(usize) = .empty;
+    defer fillSizeIndices.deinit(allocator);
+
+    var absoluteElIndices: std.ArrayList(usize) = .empty;
+    defer absoluteElIndices.deinit(allocator);
+
+    const numRelative = countRelativeElements(layoutInfo.elements);
+    var possibleFillSize = sizeConstraint.height;
+
+    if (layoutType == .Vertical) {
+        elInfo.height = 0;
+    }
+
+    for (layoutInfo.elements, 0..) |elOrNull, index| {
+        const el = elOrNull orelse continue;
+
+        if (el.styles.styles.position == .Absolute) {
+            try absoluteElIndices.append(allocator, index);
+            continue;
+        }
+
+        const layoutConstraint = layoutInfo.getConstraint(index);
+        const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
+            var newConstraint = getSizeConstraint(
+                sizeConstraint,
+                cons,
+                null,
+                null,
+            );
+            newConstraint.width -|= preAdjust.width + postAdjust.width;
+            newConstraint.height -|= preAdjust.height + postAdjust.height;
+
+            break :a .{
+                newConstraint,
+                cons,
+            };
+        } else .{ sizeConstraint, Constraint{} };
+
+        const innerElPos = utils.Pos{
+            .x = preAdjust.width,
+            .y = preAdjust.height,
+        };
+        try setElementDimensions(
+            allocator,
+            el,
+            newSizeConstraint,
+            newElConstraint,
+            innerElPos,
+            lastRelativeAnchor,
+        );
+        switch (layoutType) {
+            .Horizontal => {
+                elInfo.width += el.layoutInfo.width;
+                elInfo.height = @max(
+                    elInfo.height,
+                    el.layoutInfo.height + preAdjust.height + postAdjust.height,
+                );
+            },
+            .Vertical => {
+                elInfo.height += el.layoutInfo.height;
+                elInfo.width = @max(
+                    elInfo.width,
+                    el.layoutInfo.width + preAdjust.width + postAdjust.width,
+                );
+            },
+        }
+
+        if (index + 1 < numRelative) {
+            switch (layoutType) {
+                .Horizontal => {
+                    elInfo.width += element.styles.styles.gap;
+                    possibleFillSize -|= element.styles.styles.gap;
+                },
+                .Vertical => {
+                    elInfo.height += element.styles.styles.gap;
+                    possibleFillSize -|= element.styles.styles.gap;
+                },
+            }
+        }
+
+        if (layoutConstraint != null and
+            (if (layoutType == .Horizontal)
+                layoutConstraint.?.width
+            else
+                layoutConstraint.?.height) == .Fill)
+        {
+            try fillSizeIndices.append(allocator, index);
+        } else {
+            possibleFillSize -|= if (layoutType == .Horizontal)
+                el.layoutInfo.width
+            else
+                el.layoutInfo.height;
+        }
+    }
+
+    const newRelativeAnchor: ElementLayoutInfo = if (element.styles.styles.relativeAnchor)
+        elInfo.*
+    else
+        lastRelativeAnchor;
+
+    const absoluteSizeConstraint = utils.Size{
+        .width = newRelativeAnchor.width,
+        .height = newRelativeAnchor.height,
+    };
+
+    for (absoluteElIndices.items) |index| {
+        const elOrNull = layoutInfo.elements[index];
+        const el = elOrNull orelse continue;
+        try setElementDimensions(
+            allocator,
+            el,
+            absoluteSizeConstraint,
+            constraint,
+            .{},
+            newRelativeAnchor,
+        );
+    }
+
+    var elSizes = try allocator.alloc(u16, fillSizeIndices.items.len);
+    defer allocator.free(elSizes);
+
+    var fillItemCount = fillSizeIndices.items.len;
+    var remainingSizeBudget = possibleFillSize;
+    var i: usize = 0;
+    while (fillItemCount > 0) : ({
+        i += 1;
+        fillItemCount -= 1;
+    }) {
+        const amount = remainingSizeBudget / @as(u16, @intCast(fillItemCount));
+        elSizes[i] = amount;
+        remainingSizeBudget -= amount;
+    }
+
+    var sizeAcc: u16 = 0;
+    i = 0;
+    for (layoutInfo.elements, 0..) |elOrNull, index| {
+        const el = elOrNull orelse continue;
+        if (el.styles.styles.position == .Absolute) continue;
+
+        switch (layoutType) {
+            .Horizontal => {
+                el.layoutInfo.xOffset = elInfo.xOffset + preAdjust.width + sizeAcc;
+            },
+            .Vertical => {
+                el.layoutInfo.yOffset = elInfo.yOffset + preAdjust.height + sizeAcc;
+            },
+        }
+
+        const layoutConstraint = layoutInfo.getConstraint(index);
+        if (layoutConstraint) |cons| {
+            const elPreAdjust = getPreAdjustment(el.styles);
+            const elPostAdjust = getPostAdjustment(el.styles);
+
+            const constraintTarget = if (layoutType == .Horizontal) cons.width else cons.height;
+            const inverseConstraintTarget = if (layoutType == .Horizontal) cons.height else cons.width;
+
+            if (constraintTarget == .Fill) {
+                switch (layoutType) {
+                    .Horizontal => {
+                        el.layoutInfo.width = @max(
+                            elSizes[i],
+                            elPreAdjust.width + elPostAdjust.width,
+                        );
+                        trimTextElContentToWidth(
+                            el,
+                            elSizes[i] -| (elPreAdjust.width + elPostAdjust.width),
+                        );
+
+                        i += 1;
+                    },
+                    .Vertical => {
+                        el.layoutInfo.height = @max(
+                            elSizes[i],
+                            elPreAdjust.height + elPostAdjust.height,
+                        );
+                        i += 1;
+                    },
+                }
+            }
+
+            if (inverseConstraintTarget == .Fill) {
+                switch (layoutType) {
+                    .Horizontal => {
+                        el.layoutInfo.height = @max(
+                            el.layoutInfo.height,
+                            elPreAdjust.height + elPostAdjust.height,
+                            sizeConstraint.height,
+                        );
+                    },
+                    .Vertical => {
+                        el.layoutInfo.width = @max(
+                            el.layoutInfo.width,
+                            elPreAdjust.width + elPostAdjust.width,
+                            sizeConstraint.width,
+                        );
+                    },
+                }
+            }
+        }
+
+        switch (layoutType) {
+            .Horizontal => {
+                sizeAcc += el.layoutInfo.width;
+                if (index + 1 < numRelative) {
+                    sizeAcc += element.styles.styles.gap;
+                }
+            },
+            .Vertical => {
+                sizeAcc += el.layoutInfo.height;
+                if (index + 1 < numRelative) {
+                    sizeAcc += element.styles.styles.gap;
+                }
+            },
+        }
     }
 }

@@ -22,12 +22,12 @@ pub const Text = struct {
     }
 };
 
-const LayoutTypes = enum {
+pub const LayoutTypes = enum {
     Vertical,
     Horizontal,
 };
 
-const LayoutUtil = struct {
+pub const LayoutUtil = struct {
     const Self = @This();
 
     elements: []const ?*ui.UIElement,
