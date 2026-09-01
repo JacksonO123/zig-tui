@@ -185,7 +185,6 @@ const TextRenderUtil = struct {
 
 pub fn setElementDimensions(
     allocator: Allocator,
-    context: *RenderContext(anyopaque, void),
     element: *UIElement,
     sizeConstraint: utils.Size,
     constraint: Constraint,
@@ -219,10 +218,10 @@ pub fn setElementDimensions(
             try textRenderer.render(allocator, text.data);
 
             text.renderedData = textRenderer.lines.items;
-            elInfo.width = textRenderer.width;
-            elInfo.height = textRenderer.height;
+            elInfo.width = textRenderer.width + preAdjust.width + postAdjust.width;
+            elInfo.height = textRenderer.height + preAdjust.height + postAdjust.height;
 
-            adjustElInfoDimensions(&elInfo, constraint, sizeConstraint, preAdjust, postAdjust);
+            adjustElInfoDimensions(&elInfo, constraint, sizeConstraint);
         },
         .Layout => |layout| {
             elInfo.width += preAdjust.width + postAdjust.width;
@@ -270,7 +269,6 @@ pub fn setElementDimensions(
                         };
                         try setElementDimensions(
                             allocator,
-                            context,
                             el,
                             newSizeConstraint,
                             newElConstraint,
@@ -314,7 +312,6 @@ pub fn setElementDimensions(
                         const el = elOrNull orelse continue;
                         try setElementDimensions(
                             allocator,
-                            context,
                             el,
                             absoluteSizeConstraint,
                             constraint,
@@ -422,7 +419,6 @@ pub fn setElementDimensions(
                         };
                         try setElementDimensions(
                             allocator,
-                            context,
                             el,
                             newSizeConstraint,
                             newElConstraint,
@@ -466,7 +462,6 @@ pub fn setElementDimensions(
                         const el = elOrNull orelse continue;
                         try setElementDimensions(
                             allocator,
-                            context,
                             el,
                             absoluteSizeConstraint,
                             constraint,
@@ -528,7 +523,7 @@ pub fn setElementDimensions(
                 },
             }
 
-            adjustElInfoDimensions(&elInfo, constraint, sizeConstraint, preAdjust, postAdjust);
+            adjustElInfoDimensions(&elInfo, constraint, sizeConstraint);
         },
     }
 
@@ -672,8 +667,6 @@ fn adjustElInfoDimensions(
     elInfo: *ElementLayoutInfo,
     constraint: Constraint,
     sizeConstraint: utils.Size,
-    preAdjust: utils.Size,
-    postAdjust: utils.Size,
 ) void {
     const maxWidthWithConstraintValue = switch (constraint.width) {
         .Value, .Percent, .Ratio => true,
@@ -684,7 +677,7 @@ fn adjustElInfoDimensions(
         .Max, .Min, .None, .Fill => false,
     };
 
-    const finalElWidth = elInfo.width + preAdjust.width + postAdjust.width;
+    const finalElWidth = elInfo.width;
     elInfo.width = if (maxWidthWithConstraintValue)
         @max(finalElWidth, sizeConstraint.width)
     else
@@ -694,7 +687,7 @@ fn adjustElInfoDimensions(
         elInfo.width = @max(elInfo.width, constraint.width.Min);
     }
 
-    const finalElHeight = elInfo.height + preAdjust.height + postAdjust.height;
+    const finalElHeight = elInfo.height;
     elInfo.height = if (maxHeightWithConstraintValue)
         @max(finalElHeight, sizeConstraint.height)
     else

@@ -64,7 +64,6 @@ pub fn render(
 
         try ui.setElementDimensions(
             context.terminalUtils.renderArena.allocator(),
-            context,
             el,
             termSizeCopy,
             .{},
