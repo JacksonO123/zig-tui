@@ -232,25 +232,25 @@ pub fn setElementDimensions(
             elInfo.width += preAdjust.width + postAdjust.width;
             elInfo.height += preAdjust.height + postAdjust.height;
 
-            switch (layout) {
-                .Horizontal => |layoutInfo| try setLayoutDimensions(
+            switch (layout.data.direction) {
+                .Horizontal => try setLayoutDimensions(
                     allocator,
                     .Horizontal,
                     element,
                     &elInfo,
-                    layoutInfo,
+                    layout,
                     constraint,
                     sizeConstraint,
                     preAdjust,
                     postAdjust,
                     lastRelativeAnchor,
                 ),
-                .Vertical => |layoutInfo| try setLayoutDimensions(
+                .Vertical => try setLayoutDimensions(
                     allocator,
                     .Vertical,
                     element,
                     &elInfo,
-                    layoutInfo,
+                    layout,
                     constraint,
                     sizeConstraint,
                     preAdjust,
@@ -368,8 +368,8 @@ pub fn getIdsContainingPointImpl(
             }
 
             const elements = switch (layout) {
-                .Horizontal => |info| info.elements,
-                .Vertical => |info| info.elements,
+                .Horizontal => |info| info.data.elements,
+                .Vertical => |info| info.data.elements,
             };
 
             for (elements) |elOrNull| {
@@ -439,7 +439,7 @@ fn setLayoutDimensions(
     comptime layoutType: components.LayoutTypes,
     element: *UIElement,
     elInfo: *ElementLayoutInfo,
-    layoutInfo: components.LayoutUtil,
+    layoutInfo: components.Layout,
     constraint: Constraint,
     sizeConstraint: utils.Size,
     preAdjust: utils.Size,
@@ -452,14 +452,14 @@ fn setLayoutDimensions(
     var absoluteElIndices: std.ArrayList(usize) = .empty;
     defer absoluteElIndices.deinit(allocator);
 
-    const numRelative = countRelativeElements(layoutInfo.elements);
+    const numRelative = countRelativeElements(layoutInfo.data.elements);
     var possibleFillSize = sizeConstraint.height;
 
     if (layoutType == .Vertical) {
         elInfo.height = 0;
     }
 
-    for (layoutInfo.elements, 0..) |elOrNull, index| {
+    for (layoutInfo.data.elements, 0..) |elOrNull, index| {
         const el = elOrNull orelse continue;
 
         if (el.styles.styles.position == .Absolute) {
@@ -467,7 +467,7 @@ fn setLayoutDimensions(
             continue;
         }
 
-        const layoutConstraint = layoutInfo.getConstraint(index);
+        const layoutConstraint = layoutInfo.data.getConstraint(index);
         const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
             var newConstraint = getSizeConstraint(
                 sizeConstraint,
@@ -552,7 +552,7 @@ fn setLayoutDimensions(
     };
 
     for (absoluteElIndices.items) |index| {
-        const elOrNull = layoutInfo.elements[index];
+        const elOrNull = layoutInfo.data.elements[index];
         const el = elOrNull orelse continue;
         try setElementDimensions(
             allocator,
@@ -581,7 +581,7 @@ fn setLayoutDimensions(
 
     var sizeAcc: u16 = 0;
     i = 0;
-    for (layoutInfo.elements, 0..) |elOrNull, index| {
+    for (layoutInfo.data.elements, 0..) |elOrNull, index| {
         const el = elOrNull orelse continue;
         if (el.styles.styles.position == .Absolute) continue;
 
@@ -594,7 +594,7 @@ fn setLayoutDimensions(
             },
         }
 
-        const layoutConstraint = layoutInfo.getConstraint(index);
+        const layoutConstraint = layoutInfo.data.getConstraint(index);
         if (layoutConstraint) |cons| {
             const elPreAdjust = getPreAdjustment(el.styles);
             const elPostAdjust = getPostAdjustment(el.styles);

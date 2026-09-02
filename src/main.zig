@@ -48,18 +48,17 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     var text = try tui.Text.fromConstText(allocator, "    ");
     _ = text.styles.border(.Rounded);
 
-    var layout1 = try tui.Layout.fromElements(allocator, &.{text}, .Horizontal);
+    var layout1 = try tui.Layout.builder(allocator, .Horizontal).elements(&.{text}).build();
     _ = layout1.styles.border(.Rounded);
 
-    const layout2 = try tui.Layout.fromElementsAndConstraints(
-        allocator,
-        &.{layout1},
-        &.{.{
-            .width = .{ .Value = 40 },
-            .height = .{ .Value = 16 },
-        }},
-        .Horizontal,
-    );
+    const layout2 = try tui.Layout.builder(allocator, .Horizontal)
+        .elements(&.{layout1})
+        .constraints(&.{
+            .{
+                .width = .{ .Value = 40 },
+                .height = .{ .Value = 16 },
+            },
+        }).build();
 
     return layout2;
 }

@@ -116,31 +116,15 @@ pub const BackBuffer = struct {
                 }
             },
             .Layout => |layout| {
-                switch (layout) {
-                    .Horizontal => |layoutUtil| {
-                        for (layoutUtil.elements) |elOrNull| {
-                            const el = elOrNull orelse continue;
-                            try self.renderInBuffer(
-                                allocator,
-                                el,
-                                size,
-                                renderPos,
-                                newAbsoluteWritePosAcc,
-                            );
-                        }
-                    },
-                    .Vertical => |layoutUtil| {
-                        for (layoutUtil.elements) |elOrNull| {
-                            const el = elOrNull orelse continue;
-                            try self.renderInBuffer(
-                                allocator,
-                                el,
-                                size,
-                                renderPos,
-                                newAbsoluteWritePosAcc,
-                            );
-                        }
-                    },
+                for (layout.data.elements) |elOrNull| {
+                    const el = elOrNull orelse continue;
+                    try self.renderInBuffer(
+                        allocator,
+                        el,
+                        size,
+                        renderPos,
+                        newAbsoluteWritePosAcc,
+                    );
                 }
             },
         }

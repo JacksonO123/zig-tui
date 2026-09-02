@@ -27,67 +27,65 @@ pub const LayoutTypes = enum {
     Horizontal,
 };
 
-pub const LayoutUtil = struct {
+pub const Layout = struct {
     const Self = @This();
 
-    elements: []const ?*ui.UIElement,
-    constraints: []ui.Constraint,
-
-    pub fn getConstraint(self: Self, index: usize) ?ui.Constraint {
-        if (index < self.constraints.len) {
-            return self.constraints[index];
-        }
-
-        return null;
-    }
-};
-
-pub const Layout = union(LayoutTypes) {
-    const Self = @This();
-
-    Vertical: LayoutUtil,
-    Horizontal: LayoutUtil,
-
-    pub fn fromElements(
-        allocator: Allocator,
-        elements: []const ?*ui.UIElement,
-        direction: LayoutTypes,
-    ) !*ui.UIElement {
-        return fromElementsAndConstraints(allocator, elements, &.{}, direction);
-    }
-
-    pub fn fromElementsAndConstraints(
-        allocator: Allocator,
+    const LayoutData = struct {
         elements: []const ?*ui.UIElement,
         constraints: []const ui.Constraint,
         direction: LayoutTypes,
-    ) !*ui.UIElement {
-        const elementSlice = try allocator.dupe(?*ui.UIElement, elements);
-        const constraintSlice = try allocator.dupe(ui.Constraint, constraints);
 
-        const layout: Self = switch (direction) {
-            .Vertical => .{
-                .Vertical = .{
-                    .elements = elementSlice,
-                    .constraints = constraintSlice,
-                },
-            },
-            .Horizontal => .{
-                .Horizontal = .{
-                    .elements = elementSlice,
-                    .constraints = constraintSlice,
-                },
-            },
-        };
-        const el = ui.UIElement.fromVariant(.{ .Layout = layout });
-        return el.alloc(allocator);
-    }
+        pub fn getConstraint(self: @This(), index: usize) ?ui.Constraint {
+            if (index < self.constraints.len) {
+                return self.constraints[index];
+            }
 
-    pub fn getConstraint(self: Self, index: usize) ?ui.Constraint {
-        return switch (self) {
-            .Horizontal => |layout| layout.getConstraint(index),
-            .Vertical => |layout| layout.getConstraint(index),
-        };
+            return null;
+        }
+    };
+
+    const LayoutBuilder = struct {
+        const BuilderSelf = @This();
+
+        allocator: Allocator,
+        data: LayoutData,
+        err: ?Allocator.Error = null,
+
+        pub fn build(self: BuilderSelf) !*ui.UIElement {
+            if (self.err) |err| return err;
+            const el = ui.UIElement.fromVariant(.{ .Layout = .{ .data = self.data } });
+            return try el.alloc(self.allocator);
+        }
+
+        pub fn elements(self: *BuilderSelf, elementSlice: []const ?*ui.UIElement) *BuilderSelf {
+            const sliceClone = self.allocator.dupe(?*ui.UIElement, elementSlice) catch |err| {
+                self.err = err;
+                return self;
+            };
+            self.data.elements = sliceClone;
+            return self;
+        }
+
+        pub fn constraints(self: *BuilderSelf, constraintSlice: []const ui.Constraint) *BuilderSelf {
+            self.data.constraints = self.allocator.dupe(ui.Constraint, constraintSlice) catch |err| {
+                self.err = err;
+                return self;
+            };
+            return self;
+        }
+    };
+
+    data: LayoutData,
+
+    pub inline fn builder(allocator: Allocator, direction: LayoutTypes) *LayoutBuilder {
+        return @constCast(&LayoutBuilder{
+            .allocator = allocator,
+            .data = .{
+                .elements = &.{},
+                .constraints = &.{},
+                .direction = direction,
+            },
+        });
     }
 };
 
