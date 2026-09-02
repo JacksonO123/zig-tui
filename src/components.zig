@@ -27,13 +27,20 @@ pub const LayoutTypes = enum {
     Horizontal,
 };
 
+pub const AlignmentDirections = enum {
+    Start,
+    Center,
+    End,
+};
+
 pub const Layout = struct {
     const Self = @This();
 
     const LayoutData = struct {
-        elements: []const ?*ui.UIElement,
-        constraints: []const ui.Constraint,
+        elements: []const ?*ui.UIElement = &.{},
+        constraints: []const ui.Constraint = &.{},
         direction: LayoutTypes,
+        alignment: AlignmentDirections = .Start,
 
         pub fn getConstraint(self: @This(), index: usize) ?ui.Constraint {
             if (index < self.constraints.len) {
@@ -73,6 +80,11 @@ pub const Layout = struct {
             };
             return self;
         }
+
+        pub fn alignment(self: *BuilderSelf, alignmentDirection: AlignmentDirections) *BuilderSelf {
+            self.data.alignment = alignmentDirection;
+            return self;
+        }
     };
 
     data: LayoutData,
@@ -81,8 +93,6 @@ pub const Layout = struct {
         return @constCast(&LayoutBuilder{
             .allocator = allocator,
             .data = .{
-                .elements = &.{},
-                .constraints = &.{},
                 .direction = direction,
             },
         });

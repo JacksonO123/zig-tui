@@ -439,7 +439,7 @@ fn setLayoutDimensions(
     comptime layoutType: components.LayoutTypes,
     element: *UIElement,
     elInfo: *ElementLayoutInfo,
-    layoutInfo: components.Layout,
+    layout: components.Layout,
     constraint: Constraint,
     sizeConstraint: utils.Size,
     preAdjust: utils.Size,
@@ -452,14 +452,17 @@ fn setLayoutDimensions(
     var absoluteElIndices: std.ArrayList(usize) = .empty;
     defer absoluteElIndices.deinit(allocator);
 
-    const numRelative = countRelativeElements(layoutInfo.data.elements);
-    var possibleFillSize = sizeConstraint.height;
+    const numRelative = countRelativeElements(layout.data.elements);
+    var possibleFillSize = if (layoutType == .Horizontal)
+        sizeConstraint.width - (preAdjust.width + postAdjust.width)
+    else
+        sizeConstraint.height - (preAdjust.height + postAdjust.height);
 
     if (layoutType == .Vertical) {
         elInfo.height = 0;
     }
 
-    for (layoutInfo.data.elements, 0..) |elOrNull, index| {
+    for (layout.data.elements, 0..) |elOrNull, index| {
         const el = elOrNull orelse continue;
 
         if (el.styles.styles.position == .Absolute) {
@@ -467,7 +470,7 @@ fn setLayoutDimensions(
             continue;
         }
 
-        const layoutConstraint = layoutInfo.data.getConstraint(index);
+        const layoutConstraint = layout.data.getConstraint(index);
         const newSizeConstraint, const newElConstraint = if (layoutConstraint) |cons| a: {
             var newConstraint = getSizeConstraint(
                 sizeConstraint,
@@ -552,7 +555,7 @@ fn setLayoutDimensions(
     };
 
     for (absoluteElIndices.items) |index| {
-        const elOrNull = layoutInfo.data.elements[index];
+        const elOrNull = layout.data.elements[index];
         const el = elOrNull orelse continue;
         try setElementDimensions(
             allocator,
@@ -579,22 +582,17 @@ fn setLayoutDimensions(
         remainingSizeBudget -= amount;
     }
 
-    var sizeAcc: u16 = 0;
+    var sizeAcc: u16 = switch (layout.data.alignment) {
+        .Start => 0,
+        .Center => possibleFillSize / 2,
+        .End => possibleFillSize,
+    };
     i = 0;
-    for (layoutInfo.data.elements, 0..) |elOrNull, index| {
+    for (layout.data.elements, 0..) |elOrNull, index| {
         const el = elOrNull orelse continue;
         if (el.styles.styles.position == .Absolute) continue;
 
-        switch (layoutType) {
-            .Horizontal => {
-                el.layoutInfo.xOffset = elInfo.xOffset + preAdjust.width + sizeAcc;
-            },
-            .Vertical => {
-                el.layoutInfo.yOffset = elInfo.yOffset + preAdjust.height + sizeAcc;
-            },
-        }
-
-        const layoutConstraint = layoutInfo.data.getConstraint(index);
+        const layoutConstraint = layout.data.getConstraint(index);
         if (layoutConstraint) |cons| {
             const elPreAdjust = getPreAdjustment(el.styles);
             const elPostAdjust = getPostAdjustment(el.styles);
@@ -644,6 +642,15 @@ fn setLayoutDimensions(
                     },
                 }
             }
+        }
+
+        switch (layoutType) {
+            .Horizontal => {
+                el.layoutInfo.xOffset = elInfo.xOffset + preAdjust.width + sizeAcc;
+            },
+            .Vertical => {
+                el.layoutInfo.yOffset = elInfo.yOffset + preAdjust.height + sizeAcc;
+            },
         }
 
         switch (layoutType) {

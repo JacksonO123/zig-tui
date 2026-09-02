@@ -48,7 +48,13 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     var text = try tui.Text.fromConstText(allocator, "    ");
     _ = text.styles.border(.Rounded);
 
-    var layout1 = try tui.Layout.builder(allocator, .Horizontal).elements(&.{text}).build();
+    var text2 = try tui.Text.fromConstText(allocator, "    ");
+    _ = text2.styles.border(.Rounded);
+
+    var layout1 = try tui.Layout.builder(allocator, .Horizontal)
+        .elements(&.{ text2, text })
+        .alignment(.End)
+        .build();
     _ = layout1.styles.border(.Rounded);
 
     const layout2 = try tui.Layout.builder(allocator, .Horizontal)
@@ -58,7 +64,8 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
                 .width = .{ .Value = 40 },
                 .height = .{ .Value = 16 },
             },
-        }).build();
+        })
+        .build();
 
     return layout2;
 }
