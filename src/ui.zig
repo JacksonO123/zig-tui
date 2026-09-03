@@ -519,14 +519,14 @@ fn setLayoutDimensions(
         if (index + 1 < numRelative) {
             switch (layoutType) {
                 .Horizontal => {
-                    elInfo.width += element.styles.styles.gap;
-                    possibleFillSize -|= element.styles.styles.gap;
+                    elInfo.width += layout.data.gap;
                 },
                 .Vertical => {
-                    elInfo.height += element.styles.styles.gap;
-                    possibleFillSize -|= element.styles.styles.gap;
+                    elInfo.height += layout.data.gap;
                 },
             }
+
+            possibleFillSize -|= layout.data.gap;
         }
 
         if (layoutConstraint != null and
@@ -582,11 +582,32 @@ fn setLayoutDimensions(
         remainingSizeBudget -= amount;
     }
 
+    const numElsMinusOne: u16 = @intCast(layout.data.elements.len -| 1);
+    var gapAmount, const availableFillSize = switch (layout.data.spacing) {
+        .Normal => .{ 0, possibleFillSize },
+        .Between => .{
+            (possibleFillSize / @as(u16, @max(1, numElsMinusOne))) + (layout.data.gap * numElsMinusOne),
+            0,
+        },
+        .Evenly => .{
+            (possibleFillSize / @as(
+                u16,
+                @intCast(layout.data.elements.len + 1),
+            )) + (layout.data.gap * numElsMinusOne),
+            0,
+        },
+    };
+    gapAmount = @max(layout.data.gap, gapAmount);
     var sizeAcc: u16 = switch (layout.data.alignment) {
         .Start => 0,
-        .Center => possibleFillSize / 2,
-        .End => possibleFillSize,
+        .Center => availableFillSize / 2,
+        .End => availableFillSize,
     };
+
+    if (layout.data.spacing == .Evenly) {
+        sizeAcc += gapAmount -| layout.data.gap;
+    }
+
     i = 0;
     for (layout.data.elements, 0..) |elOrNull, index| {
         const el = elOrNull orelse continue;
@@ -654,18 +675,12 @@ fn setLayoutDimensions(
         }
 
         switch (layoutType) {
-            .Horizontal => {
-                sizeAcc += el.layoutInfo.width;
-                if (index + 1 < numRelative) {
-                    sizeAcc += element.styles.styles.gap;
-                }
-            },
-            .Vertical => {
-                sizeAcc += el.layoutInfo.height;
-                if (index + 1 < numRelative) {
-                    sizeAcc += element.styles.styles.gap;
-                }
-            },
+            .Horizontal => sizeAcc += el.layoutInfo.width,
+            .Vertical => sizeAcc += el.layoutInfo.height,
+        }
+
+        if (index + 1 < numRelative) {
+            sizeAcc += gapAmount;
         }
     }
 }

@@ -111,7 +111,6 @@ pub const StyleConfig = struct {
     italicState: ActiveState = .None,
     fg: Color = .None,
     bg: Color = .None,
-    gap: u16 = 0,
     wordWrap: bool = false,
     position: PositionTypes = .Relative,
     relativeAnchor: bool = false,
@@ -205,11 +204,6 @@ pub const Styles = struct {
 
     pub fn italic(self: *Self) *Self {
         self.styles.italicState = .Active;
-        return self;
-    }
-
-    pub fn gap(self: *Self, amount: u16) *Self {
-        self.styles.gap = amount;
         return self;
     }
 

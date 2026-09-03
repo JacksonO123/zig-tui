@@ -51,9 +51,10 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     var text2 = try tui.Text.fromConstText(allocator, "    ");
     _ = text2.styles.border(.Rounded);
 
-    var layout1 = try tui.Layout.builder(allocator, .Horizontal)
+    var layout1 = try tui.Layout.builder(allocator, .Vertical)
         .elements(&.{ text2, text })
         .alignment(.End)
+        .spacing(.Between)
         .build();
     _ = layout1.styles.border(.Rounded);
 

@@ -33,6 +33,12 @@ pub const AlignmentDirections = enum {
     End,
 };
 
+pub const LayoutSpacing = enum {
+    Normal,
+    Between,
+    Evenly,
+};
+
 pub const Layout = struct {
     const Self = @This();
 
@@ -41,6 +47,8 @@ pub const Layout = struct {
         constraints: []const ui.Constraint = &.{},
         direction: LayoutTypes,
         alignment: AlignmentDirections = .Start,
+        spacing: LayoutSpacing = .Normal,
+        gap: u16 = 0,
 
         pub fn getConstraint(self: @This(), index: usize) ?ui.Constraint {
             if (index < self.constraints.len) {
@@ -65,6 +73,7 @@ pub const Layout = struct {
         }
 
         pub fn elements(self: *BuilderSelf, elementSlice: []const ?*ui.UIElement) *BuilderSelf {
+            if (self.err != null) return self;
             const sliceClone = self.allocator.dupe(?*ui.UIElement, elementSlice) catch |err| {
                 self.err = err;
                 return self;
@@ -74,6 +83,7 @@ pub const Layout = struct {
         }
 
         pub fn constraints(self: *BuilderSelf, constraintSlice: []const ui.Constraint) *BuilderSelf {
+            if (self.err != null) return self;
             self.data.constraints = self.allocator.dupe(ui.Constraint, constraintSlice) catch |err| {
                 self.err = err;
                 return self;
@@ -83,6 +93,16 @@ pub const Layout = struct {
 
         pub fn alignment(self: *BuilderSelf, alignmentDirection: AlignmentDirections) *BuilderSelf {
             self.data.alignment = alignmentDirection;
+            return self;
+        }
+
+        pub fn spacing(self: *BuilderSelf, spacingType: LayoutSpacing) *BuilderSelf {
+            self.data.spacing = spacingType;
+            return self;
+        }
+
+        pub fn gap(self: *BuilderSelf, amount: u16) *BuilderSelf {
+            self.data.gap = amount;
             return self;
         }
     };
