@@ -180,7 +180,7 @@ pub fn matchRenderStyle(
         writer,
     );
 
-    if (std.meta.activeTag(rendering.fg) != std.meta.activeTag(styles.fg)) {
+    if (!std.meta.eql(rendering.fg, styles.fg)) {
         try sequences.setFgFromColor(styles.fg, writer);
         rendering.fg = styles.fg;
     }
