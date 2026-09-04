@@ -78,7 +78,7 @@ pub const BackBuffer = struct {
             try self.ensureLineExists(allocator, renderPos.y + element.layoutInfo.height, size.width);
             var styleCpy = simpleStyles;
             styleCpy.underline = false;
-            for (self.buffer.items[renderPos.y .. renderPos.y + element.layoutInfo.height]) |line| a: {
+            for (self.buffer.items[renderPos.y .. renderPos.y + element.layoutInfo.height], 0..) |line, rowIndex| a: {
                 if (renderPos.x >= size.width) break :a;
                 const to = @min(renderPos.x + element.layoutInfo.width, size.width);
                 @memset(line.items[renderPos.x..to], .{
@@ -88,6 +88,19 @@ pub const BackBuffer = struct {
                     },
                     .style = styleCpy,
                 });
+
+                if (element.styles.styles.cellFn) |cellFn| {
+                    for (line.items[renderPos.x..to], 0..) |*cell, colIndex| {
+                        if (cellFn(
+                            @intCast(rowIndex),
+                            @intCast(colIndex),
+                            element.layoutInfo.width,
+                            element.layoutInfo.height,
+                        )) |cellStyle| {
+                            cell.style = cellStyle;
+                        }
+                    }
+                }
             }
         }
 

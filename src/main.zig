@@ -39,7 +39,36 @@ pub fn main(init: std.process.Init) !void {
         init.gpa.destroy(context);
     }
 
+    try context.on("stdin", .{context}, stdinHandler);
+
     try context.render(init.io, renderUI, writer);
+}
+
+fn testCellFn(row: u16, col: u16, width: u16, height: u16) ?tui.SimpleDataStyle {
+    const black = tui.RgbColor.from(0, 0, 0);
+    const red = tui.RgbColor.from(255, 0, 0);
+    const green = tui.RgbColor.from(0, 255, 0);
+    const yellow = tui.RgbColor.from(240, 236, 7);
+
+    const tHorizontal = a: {
+        const fCol: f64 = @floatFromInt(col);
+        const fWidth: f64 = @floatFromInt(width);
+        break :a fCol / fWidth;
+    };
+    const tVertical = a: {
+        const fRow: f64 = @floatFromInt(row);
+        const fHeight: f64 = @floatFromInt(height);
+        break :a fRow / fHeight;
+    };
+
+    const redCorner = black.lerp(red, tHorizontal * (1 - tVertical));
+    const yellowCorner = black.lerp(yellow, tHorizontal * tVertical);
+    const greenCorner = black.lerp(green, (1 - tHorizontal) * tVertical);
+    const cellColor = redCorner.lerp(yellowCorner, 0.5).scale(2).lerp(greenCorner, 0.5).scale(2);
+
+    return .{
+        .bg = .{ .Custom = cellColor },
+    };
 }
 
 fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
@@ -56,7 +85,7 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
         .alignment(.End)
         .spacing(.Between)
         .build();
-    _ = layout1.styles.border(.Rounded);
+    _ = layout1.styles.border(.Rounded).cellFn(&testCellFn);
 
     const layout2 = try tui.Layout.builder(allocator, .Horizontal)
         .elements(&.{layout1})
@@ -69,4 +98,14 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
         .build();
 
     return layout2;
+}
+
+fn stdinHandler(context: *tui.RenderContext(Model, EventDescription), data: []const u8) !void {
+    _ = data;
+    const rowInQuestion = context.backBuffer.buffer.items[1].items;
+    for (rowInQuestion, 0..) |item, index| {
+        if (item.style.bg == .Custom) {
+            try context.logger.logBufPrint(1024, "({d}): {any}", .{ index, item.style.bg.Custom });
+        }
+    }
 }
