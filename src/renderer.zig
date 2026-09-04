@@ -185,7 +185,7 @@ pub fn matchRenderStyle(
         rendering.fg = styles.fg;
     }
 
-    if (std.meta.activeTag(rendering.bg) != std.meta.activeTag(styles.bg)) {
+    if (!std.meta.eql(rendering.bg, styles.bg)) {
         try sequences.setBgFromColor(styles.bg, writer);
         rendering.bg = styles.bg;
     }

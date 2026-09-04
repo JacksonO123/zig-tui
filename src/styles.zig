@@ -79,6 +79,10 @@ pub const RgbColor = struct {
         const b: u8 = @intCast(utils.lerp(@intCast(self.b), @intCast(other.b), t));
         return from(r, g, b);
     }
+
+    pub fn scale(self: Self, scalar: u8) Self {
+        return from(self.r *| scalar, self.g *| scalar, self.b *| scalar);
+    }
 };
 
 pub const Color = union(enum) {
