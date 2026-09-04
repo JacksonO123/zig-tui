@@ -46,6 +46,7 @@ pub const Layout = components.Layout;
 pub const Input = components.Input;
 pub const Button = components.Button;
 pub const getIdsContainingPoint = ui.getIdsContainingPoint;
+pub const SimpleDataStyle = styles.SimpleDataStyle;
 
 const globalState = &@import("global.zig").globalState;
 

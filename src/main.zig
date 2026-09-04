@@ -42,6 +42,23 @@ pub fn main(init: std.process.Init) !void {
     try context.render(init.io, renderUI, writer);
 }
 
+fn testCellFn(row: u16, col: u16, width: u16, height: u16) ?tui.SimpleDataStyle {
+    _ = row;
+    _ = height;
+
+    const black = tui.RgbColor.from(0, 0, 0);
+    const red = tui.RgbColor.from(255, 0, 0);
+    const t = a: {
+        const fCol: f64 = @floatFromInt(col);
+        const fWidth: f64 = @floatFromInt(width);
+        break :a fCol / fWidth;
+    };
+    const cellColor = black.lerp(red, t);
+    return .{
+        .bg = .{ .Custom = cellColor },
+    };
+}
+
 fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     const allocator = terminal.renderAlloc;
 
@@ -56,7 +73,7 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
         .alignment(.End)
         .spacing(.Between)
         .build();
-    _ = layout1.styles.border(.Rounded);
+    _ = layout1.styles.border(.Rounded).cellFn(&testCellFn);
 
     const layout2 = try tui.Layout.builder(allocator, .Horizontal)
         .elements(&.{layout1})

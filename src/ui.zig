@@ -303,7 +303,7 @@ fn getSizeConstraint(
 pub fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {
     var adjustment: utils.Size = .{};
 
-    if (styles.hasBorder()) {
+    if (styles.styles.hasBorder()) {
         adjustment.width += 1;
         adjustment.height += 1;
     }
@@ -317,7 +317,7 @@ pub fn getPreAdjustment(styles: stylesMod.Styles) utils.Size {
 pub fn getPostAdjustment(styles: stylesMod.Styles) utils.Size {
     var adjustment: utils.Size = .{};
 
-    if (styles.hasBorder()) {
+    if (styles.styles.hasBorder()) {
         adjustment.width += 1;
         adjustment.height += 1;
     }

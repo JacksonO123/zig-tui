@@ -98,7 +98,13 @@ pub const Color = union(enum) {
 
 const PositionTypes = union(enum) { Relative, Absolute: utils.Pos };
 
+/// row, col, width, height
+const CellFn = *const fn (u16, u16, u16, u16) ?SimpleDataStyle;
+
 pub const StyleConfig = struct {
+    const Self = @This();
+
+    cellFn: ?CellFn = null,
     border: BorderStylesVariant = .None,
     padding: struct {
         paddingLeft: u16 = 0,
@@ -114,6 +120,10 @@ pub const StyleConfig = struct {
     wordWrap: bool = false,
     position: PositionTypes = .Relative,
     relativeAnchor: bool = false,
+
+    pub fn hasBorder(self: Self) bool {
+        return self.border != .None;
+    }
 };
 
 pub const Styles = struct {
@@ -133,8 +143,9 @@ pub const Styles = struct {
         };
     }
 
-    pub fn hasBorder(self: Self) bool {
-        return self.styles.border != .None;
+    pub fn cellFn(self: *Self, cellFunc: ?CellFn) *Self {
+        self.styles.cellFn = cellFunc;
+        return self;
     }
 
     pub fn fg(self: *Self, color: Color) *Self {
