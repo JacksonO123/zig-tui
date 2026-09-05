@@ -60,6 +60,7 @@ pub const BackBuffer = struct {
         absoluteWritePosAcc: utils.Pos,
     ) !void {
         const preAdjust = ui.getPreAdjustment(element.styles);
+        const postAdjust = ui.getPostAdjustment(element.styles);
         const simpleStyles = element.styles.toSimpleStyles();
 
         const newAbsoluteWritePosAcc = if (element.styles.styles.position == .Absolute)
@@ -92,10 +93,10 @@ pub const BackBuffer = struct {
                 if (element.styles.styles.cellFn) |cellFn| {
                     for (line.items[renderPos.x..to], 0..) |*cell, colIndex| {
                         if (cellFn(
-                            @intCast(rowIndex),
                             @intCast(colIndex),
-                            element.layoutInfo.width,
-                            element.layoutInfo.height,
+                            @intCast(rowIndex),
+                            element.layoutInfo.width + preAdjust.width + postAdjust.width,
+                            element.layoutInfo.height + preAdjust.height + postAdjust.height,
                         )) |cellStyle| {
                             cell.style = cellStyle;
                         }
@@ -147,60 +148,100 @@ pub const BackBuffer = struct {
             renderPos.y + element.layoutInfo.height,
             size.width,
         );
-        try self.renderStylesPost(allocator, element.layoutInfo, renderPos, element.styles, size);
+        try self.renderStylesPost(
+            allocator,
+            element.layoutInfo,
+            preAdjust,
+            postAdjust,
+            renderPos,
+            element.styles,
+            size,
+        );
     }
 
     fn renderStylesPost(
         self: *Self,
         allocator: Allocator,
         layoutInfo: ui.ElementLayoutInfo,
+        preAdjust: utils.Size,
+        postAdjust: utils.Size,
         renderPos: utils.Pos,
         styles: stylesMod.Styles,
         size: utils.Size,
     ) !void {
+        const cellFn = styles.styles.cellFn;
+        const adjustWidth = preAdjust.width + postAdjust.width;
+        const adjustHeight = preAdjust.height + postAdjust.height;
+
         var pos = renderPos;
         if (styles.styles.border.getChars()) |borderStyles| {
             var simpleStyles = styles.toSimpleStyles();
             simpleStyles.underline = false;
+
+            const topLeftCornerStyle = if (cellFn) |func|
+                func(0, 0, layoutInfo.width + adjustWidth, layoutInfo.height + adjustHeight) orelse
+                    simpleStyles
+            else
+                simpleStyles;
 
             try self.writeUnicodeAtPos(
                 allocator,
                 size,
                 pos,
                 borderStyles.corners.topLeft,
-                simpleStyles,
+                topLeftCornerStyle,
             );
 
             if (layoutInfo.width > 0) {
                 pos.x = renderPos.x + layoutInfo.width - 1;
+                const topRightCornerStyle = if (cellFn) |func|
+                    func(layoutInfo.width - 1, 0, layoutInfo.width + adjustWidth, layoutInfo.height + adjustHeight) orelse
+                        simpleStyles
+                else
+                    simpleStyles;
                 try self.writeUnicodeAtPos(
                     allocator,
                     size,
                     pos,
                     borderStyles.corners.topRight,
-                    simpleStyles,
+                    topRightCornerStyle,
                 );
 
                 pos.y = renderPos.y + layoutInfo.height - 1;
                 pos.x = renderPos.x + layoutInfo.width - 1;
+                const bottomRightCornerStyle = if (cellFn) |func|
+                    func(
+                        layoutInfo.width - 1,
+                        layoutInfo.height - 1,
+                        layoutInfo.width + adjustWidth,
+                        layoutInfo.height + adjustHeight,
+                    ) orelse
+                        simpleStyles
+                else
+                    simpleStyles;
                 try self.writeUnicodeAtPos(
                     allocator,
                     size,
                     pos,
                     borderStyles.corners.bottomRight,
-                    simpleStyles,
+                    bottomRightCornerStyle,
                 );
             }
 
             if (layoutInfo.height > 0) {
                 pos.x = renderPos.x;
                 pos.y = renderPos.y + layoutInfo.height - 1;
+                const bottomLeftCornerStyle = if (cellFn) |func|
+                    func(0, layoutInfo.height - 1, layoutInfo.width + adjustWidth, layoutInfo.height + adjustHeight) orelse
+                        simpleStyles
+                else
+                    simpleStyles;
                 try self.writeUnicodeAtPos(
                     allocator,
                     size,
                     pos,
                     borderStyles.corners.bottomLeft,
-                    simpleStyles,
+                    bottomLeftCornerStyle,
                 );
             }
 
@@ -238,9 +279,21 @@ pub const BackBuffer = struct {
                     renderPos.x + layoutInfo.width - 1,
                     line.items.len,
                 );
-                if (from <= to) {
+                if (from <= to) b: {
                     const cells = line.items[from..to];
                     @memset(cells, horizontalBorder);
+
+                    const func = cellFn orelse break :b;
+                    for (cells, 0..) |*cell, index| {
+                        const cellStyleOrNull = func(
+                            @intCast(index),
+                            0,
+                            layoutInfo.width + adjustWidth,
+                            layoutInfo.height + adjustHeight,
+                        );
+                        const cellStyle = cellStyleOrNull orelse continue;
+                        cell.style = cellStyle;
+                    }
                 }
             }
 
@@ -252,23 +305,59 @@ pub const BackBuffer = struct {
                     renderPos.x + layoutInfo.width - 1,
                     line.items.len,
                 );
-                if (from <= to) {
+                if (from <= to) b: {
                     const cells = line.items[from..to];
                     @memset(cells, horizontalBorder);
+
+                    const func = cellFn orelse break :b;
+                    for (cells, 0..) |*cell, index| {
+                        const cellStyleOrNull = func(
+                            @intCast(index),
+                            layoutInfo.height - 1,
+                            layoutInfo.width + adjustWidth,
+                            layoutInfo.height + adjustHeight,
+                        );
+                        const cellStyle = cellStyleOrNull orelse continue;
+                        cell.style = cellStyle;
+                    }
                 }
             }
 
-            var currentY: usize = renderPos.y + 1;
             const endY = renderPos.y + layoutInfo.height - 1;
-            while (currentY < endY) : (currentY += 1) {
+            var currentY: usize = renderPos.y + 1;
+            var index: u16 = 0;
+            while (currentY < endY) : ({
+                currentY += 1;
+                index += 1;
+            }) {
                 const line = self.buffer.items[currentY];
                 if (layoutInfo.width == 0 or renderPos.x >= line.items.len) break;
                 const leftCell = &line.items[renderPos.x];
+                const leftCellStyleOrNull = if (cellFn) |func|
+                    func(
+                        0,
+                        index,
+                        layoutInfo.width + adjustWidth,
+                        layoutInfo.height + adjustHeight,
+                    )
+                else
+                    null;
                 leftCell.* = verticalBorder;
+                if (leftCellStyleOrNull) |leftCellStyle| leftCell.style = leftCellStyle;
 
                 if (renderPos.x + layoutInfo.width - 1 >= line.items.len) continue;
                 const rightCell = &line.items[renderPos.x + layoutInfo.width - 1];
+                const rightCellStyleOrNull = if (cellFn) |func|
+                    func(
+                        layoutInfo.width - 1,
+                        index,
+                        layoutInfo.width,
+                        layoutInfo.height,
+                    )
+                else
+                    null;
                 rightCell.* = verticalBorder;
+                if (rightCellStyleOrNull) |rightCellStyle| rightCell.style = rightCellStyle;
             }
         }
     }

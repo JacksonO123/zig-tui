@@ -44,35 +44,32 @@ pub fn main(init: std.process.Init) !void {
     try context.render(init.io, renderUI, writer);
 }
 
-fn testCellFn(row: u16, col: u16, width: u16, height: u16) ?tui.SimpleDataStyle {
-    const black = tui.RgbColor.from(0, 0, 0);
-    const red = tui.RgbColor.from(255, 0, 0);
-    const green = tui.RgbColor.from(0, 255, 0);
-    const yellow = tui.RgbColor.from(240, 236, 7);
+fn testCellFn(col: u16, row: u16, width: u16, height: u16) ?tui.SimpleDataStyle {
+    const black = tui.RgbColor{ .r = 0, .g = 0, .b = 0 };
+    const red = tui.RgbColor{ .r = 255, .g = 0, .b = 0 };
+    const yellow = tui.RgbColor{ .r = 255, .g = 255, .b = 0 };
+    const green = tui.RgbColor{ .r = 0, .g = 255, .b = 0 };
 
-    const tHorizontal = a: {
-        const fCol: f64 = @floatFromInt(col);
-        const fWidth: f64 = @floatFromInt(width);
-        break :a fCol / fWidth;
-    };
-    const tVertical = a: {
-        const fRow: f64 = @floatFromInt(row);
-        const fHeight: f64 = @floatFromInt(height);
-        break :a fRow / fHeight;
-    };
+    const t: f64 = if (width > 1) @as(f64, @floatFromInt(col)) / @as(f64, @floatFromInt(width - 1)) else 0.0;
+    const v: f64 = if (height > 1) @as(f64, @floatFromInt(row)) / @as(f64, @floatFromInt(height - 1)) else 0.0;
 
-    const redCorner = black.lerp(red, tHorizontal * (1 - tVertical));
-    const yellowCorner = black.lerp(yellow, tHorizontal * tVertical);
-    const greenCorner = black.lerp(green, (1 - tHorizontal) * tVertical);
-    const cellColor = redCorner.lerp(yellowCorner, 0.5).scale(2).lerp(greenCorner, 0.5).scale(2);
+    const top = black.lerp(red, t);
+    const bottom = green.lerp(yellow, t);
+    const result = top.lerp(bottom, v);
 
     return .{
-        .bg = .{ .Custom = cellColor },
+        .bg = .{ .Custom = result },
     };
 }
 
 fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     const allocator = terminal.renderAlloc;
+
+    var square = try tui.Text.fromConstText(allocator, "    ");
+    _ = square.styles.border(.Rounded);
+
+    var square2 = try tui.Text.fromConstText(allocator, "    ");
+    _ = square2.styles.border(.Rounded);
 
     var text = try tui.Text.fromConstText(allocator, "    ");
     _ = text.styles.border(.Rounded);
@@ -97,7 +94,15 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
         })
         .build();
 
-    return layout2;
+    const layout3 = try tui.Layout.builder(allocator, .Horizontal)
+        .elements(&.{ square, layout2 })
+        .build();
+
+    const layout4 = try tui.Layout.builder(allocator, .Vertical)
+        .elements(&.{ square2, layout3 })
+        .build();
+
+    return layout4;
 }
 
 fn stdinHandler(context: *tui.RenderContext(Model, EventDescription), data: []const u8) !void {

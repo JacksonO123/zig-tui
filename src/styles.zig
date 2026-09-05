@@ -1,3 +1,4 @@
+const std = @import("std");
 const utils = @import("utils.zig");
 
 const BorderCornerChars = struct {
@@ -74,10 +75,17 @@ pub const RgbColor = struct {
     }
 
     pub fn lerp(self: Self, other: Self, t: f64) Self {
-        const r: u8 = @intCast(utils.lerp(@intCast(self.r), @intCast(other.r), t));
-        const g: u8 = @intCast(utils.lerp(@intCast(self.g), @intCast(other.g), t));
-        const b: u8 = @intCast(utils.lerp(@intCast(self.b), @intCast(other.b), t));
-        return from(r, g, b);
+        const r: f64 = @floatFromInt(self.r);
+        const g: f64 = @floatFromInt(self.g);
+        const b: f64 = @floatFromInt(self.b);
+        const otherR: f64 = @floatFromInt(other.r);
+        const otherG: f64 = @floatFromInt(other.g);
+        const otherB: f64 = @floatFromInt(other.b);
+        return .{
+            .r = @intFromFloat(@min(@max(r + t * (otherR - r), 0.0), 255.0)),
+            .g = @intFromFloat(@min(@max(g + t * (otherG - g), 0.0), 255.0)),
+            .b = @intFromFloat(@min(@max(b + t * (otherB - b), 0.0), 255.0)),
+        };
     }
 
     pub fn scale(self: Self, scalar: u8) Self {
@@ -102,7 +110,7 @@ pub const Color = union(enum) {
 
 const PositionTypes = union(enum) { Relative, Absolute: utils.Pos };
 
-/// row, col, width, height
+/// x, y, width, height
 const CellFn = *const fn (u16, u16, u16, u16) ?SimpleDataStyle;
 
 pub const StyleConfig = struct {

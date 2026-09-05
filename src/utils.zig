@@ -19,10 +19,6 @@ pub const Size = struct {
     width: u16 = 0,
 };
 
-pub fn lerp(a: i64, b: i64, t: f64) i64 {
-    return a + @as(i64, @intFromFloat(@as(f64, @floatFromInt(b - a)) * t));
-}
-
 pub fn indexOfStringInArray(stringArr: []const []const u8, value: []const u8) ?usize {
     for (stringArr, 0..) |string, index| {
         if (std.mem.eql(u8, string, value)) return index;
