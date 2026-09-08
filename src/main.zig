@@ -26,6 +26,23 @@ pub const Model = struct {
     }
 };
 
+fn aCellFn(x: u16, y: u16, width: u16, height: u16) ?tui.SimpleDataStyle {
+    _ = width;
+    _ = height;
+    _ = y;
+    const red = tui.RgbColor.from(255, 0, 0);
+
+    _ = x;
+    _ = red;
+    return null;
+
+    // if (x % 2 == 0) return .{
+    //     .bg = .{ .Custom = red },
+    // };
+
+    // return .{ .bg = .Black };
+}
+
 pub fn main(init: std.process.Init) !void {
     var stdoutBuf: [1024]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &stdoutBuf);
@@ -44,32 +61,8 @@ pub fn main(init: std.process.Init) !void {
     try context.render(init.io, renderUI, writer);
 }
 
-fn testCellFn(col: u16, row: u16, width: u16, height: u16) ?tui.SimpleDataStyle {
-    const black = tui.RgbColor{ .r = 0, .g = 0, .b = 0 };
-    const red = tui.RgbColor{ .r = 255, .g = 0, .b = 0 };
-    const yellow = tui.RgbColor{ .r = 255, .g = 255, .b = 0 };
-    const green = tui.RgbColor{ .r = 0, .g = 255, .b = 0 };
-
-    const t: f64 = if (width > 1) @as(f64, @floatFromInt(col)) / @as(f64, @floatFromInt(width - 1)) else 0.0;
-    const v: f64 = if (height > 1) @as(f64, @floatFromInt(row)) / @as(f64, @floatFromInt(height - 1)) else 0.0;
-
-    const top = black.lerp(red, t);
-    const bottom = green.lerp(yellow, t);
-    const result = top.lerp(bottom, v);
-
-    return .{
-        .bg = .{ .Custom = result },
-    };
-}
-
 fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     const allocator = terminal.renderAlloc;
-
-    var square = try tui.Text.fromConstText(allocator, "    ");
-    _ = square.styles.border(.Rounded);
-
-    var square2 = try tui.Text.fromConstText(allocator, "    ");
-    _ = square2.styles.border(.Rounded);
 
     var text = try tui.Text.fromConstText(allocator, "    ");
     _ = text.styles.border(.Rounded);
@@ -77,32 +70,23 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     var text2 = try tui.Text.fromConstText(allocator, "    ");
     _ = text2.styles.border(.Rounded);
 
-    var layout1 = try tui.Layout.builder(allocator, .Vertical)
+    var layout1 = try tui.Layout.builder(allocator, .Horizontal)
         .elements(&.{ text2, text })
-        .alignment(.End)
-        .spacing(.Between)
+        .alignment(.Center)
+        .spacing(.Evenly)
         .build();
-    _ = layout1.styles.border(.Rounded).cellFn(&testCellFn);
+    _ = layout1.styles.border(.Rounded).cellFn(aCellFn);
 
     const layout2 = try tui.Layout.builder(allocator, .Horizontal)
         .elements(&.{layout1})
         .constraints(&.{
             .{
-                .width = .{ .Value = 40 },
-                .height = .{ .Value = 16 },
+                .width = .Fill,
             },
         })
         .build();
 
-    const layout3 = try tui.Layout.builder(allocator, .Horizontal)
-        .elements(&.{ square, layout2 })
-        .build();
-
-    const layout4 = try tui.Layout.builder(allocator, .Vertical)
-        .elements(&.{ square2, layout3 })
-        .build();
-
-    return layout4;
+    return layout2;
 }
 
 fn stdinHandler(context: *tui.RenderContext(Model, EventDescription), data: []const u8) !void {

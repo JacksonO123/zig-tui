@@ -453,10 +453,14 @@ fn setLayoutDimensions(
     defer absoluteElIndices.deinit(allocator);
 
     const numRelative = countRelativeElements(layout.data.elements);
+    const originalSizeConstraint = switch (layoutType) {
+        .Horizontal => sizeConstraint.width,
+        .Vertical => sizeConstraint.height,
+    };
     var possibleFillSize = if (layoutType == .Horizontal)
-        sizeConstraint.width - (preAdjust.width + postAdjust.width)
+        originalSizeConstraint -| (preAdjust.width + postAdjust.width)
     else
-        sizeConstraint.height - (preAdjust.height + postAdjust.height);
+        originalSizeConstraint -| (preAdjust.height + postAdjust.height);
 
     if (layoutType == .Vertical) {
         elInfo.height = 0;
@@ -583,30 +587,46 @@ fn setLayoutDimensions(
     }
 
     const numElsMinusOne: u16 = @intCast(layout.data.elements.len -| 1);
-    var gapAmount, const availableFillSize = switch (layout.data.spacing) {
-        .Normal => .{ 0, possibleFillSize },
-        .Between => .{
-            (possibleFillSize / @as(u16, @max(1, numElsMinusOne))) + (layout.data.gap * numElsMinusOne),
-            0,
-        },
-        .Evenly => .{
-            (possibleFillSize / @as(
-                u16,
-                @intCast(layout.data.elements.len + 1),
-            )) + (layout.data.gap * numElsMinusOne),
-            0,
-        },
+
+    const usedSize = originalSizeConstraint - possibleFillSize;
+    const finalSize = a: {
+        const constraintDirection = switch (layoutType) {
+            .Horizontal => constraint.width,
+            .Vertical => constraint.height,
+        };
+        const currentSize = switch (layoutType) {
+            .Horizontal => elInfo.width,
+            .Vertical => elInfo.height,
+        };
+        break :a switch (constraintDirection) {
+            .Min => |minSize| @max(minSize, currentSize),
+            .Fill => originalSizeConstraint,
+            else => currentSize,
+        };
     };
-    gapAmount = @max(layout.data.gap, gapAmount);
+    const availableFillSize = finalSize - usedSize + switch (layout.data.spacing) {
+        .Normal, .Between => 0,
+        .Evenly => layout.data.gap * numElsMinusOne,
+    };
+
+    var gapAmount = switch (layout.data.spacing) {
+        .Normal => 0,
+        .Between => (availableFillSize / @as(u16, @max(1, numElsMinusOne))) + (layout.data.gap * numElsMinusOne),
+        .Evenly => availableFillSize / @as(
+            u16,
+            @intCast(layout.data.elements.len + 1),
+        ),
+    };
     var sizeAcc: u16 = switch (layout.data.alignment) {
         .Start => 0,
-        .Center => availableFillSize / 2,
-        .End => availableFillSize,
+        .Center => if (layout.data.spacing == .Normal) availableFillSize / 2 else 0,
+        .End => if (layout.data.spacing == .Normal) availableFillSize else 0,
     };
 
     if (layout.data.spacing == .Evenly) {
-        sizeAcc += gapAmount -| layout.data.gap;
+        sizeAcc += gapAmount;
     }
+    gapAmount = @max(layout.data.gap, gapAmount);
 
     i = 0;
     for (layout.data.elements, 0..) |elOrNull, index| {
@@ -651,14 +671,14 @@ fn setLayoutDimensions(
                         el.layoutInfo.height = @max(
                             el.layoutInfo.height,
                             elPreAdjust.height + elPostAdjust.height,
-                            sizeConstraint.height,
+                            originalSizeConstraint,
                         );
                     },
                     .Vertical => {
                         el.layoutInfo.width = @max(
                             el.layoutInfo.width,
                             elPreAdjust.width + elPostAdjust.width,
-                            sizeConstraint.width,
+                            originalSizeConstraint,
                         );
                     },
                 }
