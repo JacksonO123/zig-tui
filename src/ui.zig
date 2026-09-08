@@ -600,6 +600,7 @@ fn setLayoutDimensions(
         };
         break :a switch (constraintDirection) {
             .Min => |minSize| @max(minSize, currentSize),
+            .Fill => originalSizeConstraint,
             else => currentSize,
         };
     };

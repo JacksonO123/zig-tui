@@ -72,8 +72,8 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
 
     var layout1 = try tui.Layout.builder(allocator, .Horizontal)
         .elements(&.{ text2, text })
-        .alignment(.End)
-        // .spacing(.Between)
+        .alignment(.Center)
+        .spacing(.Evenly)
         .build();
     _ = layout1.styles.border(.Rounded).cellFn(aCellFn);
 
