@@ -32,15 +32,11 @@ fn aCellFn(x: u16, y: u16, width: u16, height: u16) ?tui.SimpleDataStyle {
     _ = y;
     const red = tui.RgbColor.from(255, 0, 0);
 
-    _ = x;
-    _ = red;
-    return null;
+    if (x % 2 == 0) return .{
+        .bg = .{ .Custom = red },
+    };
 
-    // if (x % 2 == 0) return .{
-    //     .bg = .{ .Custom = red },
-    // };
-
-    // return .{ .bg = .Black };
+    return .{ .bg = .Black };
 }
 
 pub fn main(init: std.process.Init) !void {

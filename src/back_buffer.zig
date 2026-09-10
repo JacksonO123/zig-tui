@@ -284,7 +284,7 @@ pub const BackBuffer = struct {
                     @memset(cells, horizontalBorder);
 
                     const func = cellFn orelse break :b;
-                    for (cells, 0..) |*cell, index| {
+                    for (cells, 1..) |*cell, index| {
                         const cellStyleOrNull = func(
                             @intCast(index),
                             0,
@@ -310,7 +310,7 @@ pub const BackBuffer = struct {
                     @memset(cells, horizontalBorder);
 
                     const func = cellFn orelse break :b;
-                    for (cells, 0..) |*cell, index| {
+                    for (cells, 1..) |*cell, index| {
                         const cellStyleOrNull = func(
                             @intCast(index),
                             layoutInfo.height - 1,
