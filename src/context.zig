@@ -5,17 +5,17 @@ const Writer = std.Io.Writer;
 const backBufferMod = @import("back_buffer.zig");
 const configMod = @import("config.zig");
 const eventListenersMod = @import("events/event_listeners.zig");
+const eventTypes = @import("events/event_types.zig");
+const eventUtils = @import("events/event_utils.zig");
 const frontBufferMod = @import("front_buffer.zig");
 const logMod = @import("logger.zig");
+const renderer = @import("renderer.zig");
 const sequences = @import("sequences.zig");
 const terminalMod = @import("terminal.zig");
 const terminalUtils = @import("terminal_utils.zig");
-const utils = @import("utils.zig");
-const ui = @import("ui.zig");
 const types = @import("types.zig");
-const renderer = @import("renderer.zig");
-const eventUtils = @import("events/event_utils.zig");
-const eventTypes = @import("events/event_types.zig");
+const ui = @import("ui.zig");
+const utils = @import("utils.zig");
 
 const globalState = &@import("global.zig").globalState;
 
@@ -25,7 +25,7 @@ pub const debugConfig = .{
 };
 
 pub const RenderState = struct {
-    rowOffset: u16 = 1,
+    rowOffset: u32 = 1,
     forceFullRender: bool = false,
     focusedId: ?[]const u8 = null,
 };
@@ -192,10 +192,12 @@ pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) ty
                             readData = readData[eventData.len..];
                         }
 
-                        if (readData.len == 0) break;
+                        if (readData.len == 0) {
+                            continue;
+                        }
 
-                        for (readData) |byte| {
-                            switch (byte) {
+                        if (readData.len == 1) {
+                            switch (readData[0]) {
                                 // ctrl c
                                 3,
                                 // esc

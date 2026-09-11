@@ -1,8 +1,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const ui = @import("ui.zig");
 const constants = @import("constants.zig");
+const ui = @import("ui.zig");
 
 pub const Text = struct {
     const Self = @This();
@@ -19,6 +19,20 @@ pub const Text = struct {
             },
         });
         return el.alloc(allocator);
+    }
+
+    pub fn clone(self: Self, allocator: Allocator) !*ui.UIElement {
+        const dataClone = try allocator.dupe(u8, self.data);
+        var renderedDataClone = try allocator.alloc([]u8, self.renderedData.len);
+
+        for (self.renderedData, 0..) |dataLine, index| {
+            const dataLineClone = try allocator.dupe(u8, dataLine);
+            renderedDataClone[index] = dataLineClone;
+        }
+
+        var textUiEl = try fromConstText(allocator, dataClone);
+        textUiEl.variant.Text.renderedData = renderedDataClone;
+        return textUiEl;
     }
 };
 
@@ -48,7 +62,7 @@ pub const Layout = struct {
         direction: LayoutTypes,
         alignment: AlignmentDirections = .Start,
         spacing: LayoutSpacing = .Normal,
-        gap: u16 = 0,
+        gap: u32 = 0,
 
         pub fn getConstraint(self: @This(), index: usize) ?ui.Constraint {
             if (index < self.constraints.len) {
@@ -101,7 +115,7 @@ pub const Layout = struct {
             return self;
         }
 
-        pub fn gap(self: *BuilderSelf, amount: u16) *BuilderSelf {
+        pub fn gap(self: *BuilderSelf, amount: u32) *BuilderSelf {
             self.data.gap = amount;
             return self;
         }
@@ -116,6 +130,23 @@ pub const Layout = struct {
                 .direction = direction,
             },
         });
+    }
+
+    pub fn clone(self: Self, allocator: Allocator) !*ui.UIElement {
+        const clonedElements = try allocator.dupe(?*ui.UIElement, self.data.elements);
+        const clonedConstraints = try allocator.dupe(ui.Constraint, self.data.constraints);
+
+        const clonedData = LayoutData{
+            .elements = clonedElements,
+            .constraints = clonedConstraints,
+            .direction = self.data.direction,
+            .alignment = self.data.alignment,
+            .spacing = self.data.spacing,
+            .gap = self.data.gap,
+        };
+
+        const layoutEl = ui.UIElement.fromVariant(.{ .Layout = .{ .data = clonedData } });
+        return try layoutEl.alloc(allocator);
     }
 };
 

@@ -3,8 +3,8 @@ const std = @import("std");
 pub const Pos = struct {
     const Self = @This();
 
-    x: u16 = 0,
-    y: u16 = 0,
+    x: u32 = 0,
+    y: u32 = 0,
 
     pub fn appendOffset(self: Self, other: Self) Self {
         return .{
@@ -15,8 +15,8 @@ pub const Pos = struct {
 };
 
 pub const Size = struct {
-    height: u16 = 0,
-    width: u16 = 0,
+    height: u32 = 0,
+    width: u32 = 0,
 };
 
 pub fn indexOfStringInArray(stringArr: []const []const u8, value: []const u8) ?usize {

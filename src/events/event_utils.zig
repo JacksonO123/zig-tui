@@ -13,8 +13,8 @@ pub fn handleMouseEvent(stdinData: []const u8) ?struct { event: eventTypes.Mouse
     const cyStr = it.next() orelse return null;
 
     const cb = std.fmt.parseInt(u8, cbStr, 10) catch return null;
-    const cx = std.fmt.parseInt(u16, cxStr, 10) catch return null;
-    const cy = std.fmt.parseInt(u16, cyStr, 10) catch return null;
+    const cx = std.fmt.parseInt(u32, cxStr, 10) catch return null;
+    const cy = std.fmt.parseInt(u32, cyStr, 10) catch return null;
 
     return .{
         .event = .{

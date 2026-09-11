@@ -7,5 +7,5 @@ pub const ScreenType = enum {
 
 pub const Config = struct {
     screenType: ScreenType = .Alternate,
-    rightPadding: ?u16 = null,
+    rightPadding: ?u32 = null,
 };

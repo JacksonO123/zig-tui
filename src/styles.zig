@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const utils = @import("utils.zig");
 
 const BorderCornerChars = struct {
@@ -111,7 +112,7 @@ pub const Color = union(enum) {
 const PositionTypes = union(enum) { Relative, Absolute: utils.Pos };
 
 /// x, y, width, height
-const CellFn = *const fn (u16, u16, u16, u16) ?SimpleDataStyle;
+const CellFn = *const fn (u32, u32, u32, u32) ?SimpleDataStyle;
 
 pub const StyleConfig = struct {
     const Self = @This();
@@ -119,10 +120,10 @@ pub const StyleConfig = struct {
     cellFn: ?CellFn = null,
     border: BorderStylesVariant = .None,
     padding: struct {
-        paddingLeft: u16 = 0,
-        paddingRight: u16 = 0,
-        paddingTop: u16 = 0,
-        paddingBottom: u16 = 0,
+        paddingLeft: u32 = 0,
+        paddingRight: u32 = 0,
+        paddingTop: u32 = 0,
+        paddingBottom: u32 = 0,
     } = .{},
     boldState: ActiveState = .None,
     underlineState: ActiveState = .None,
@@ -175,7 +176,7 @@ pub const Styles = struct {
         return self;
     }
 
-    pub fn padding(self: *Self, amount: u16) *Self {
+    pub fn padding(self: *Self, amount: u32) *Self {
         self.styles.padding.paddingLeft = amount;
         self.styles.padding.paddingRight = amount;
         self.styles.padding.paddingTop = amount;
@@ -183,33 +184,33 @@ pub const Styles = struct {
         return self;
     }
 
-    pub fn paddingLeft(self: *Self, amount: u16) *Self {
+    pub fn paddingLeft(self: *Self, amount: u32) *Self {
         self.styles.padding.paddingLeft = amount;
         return self;
     }
 
-    pub fn paddingRight(self: *Self, amount: u16) *Self {
+    pub fn paddingRight(self: *Self, amount: u32) *Self {
         self.styles.padding.paddingRight = amount;
         return self;
     }
 
-    pub fn paddingTop(self: *Self, amount: u16) *Self {
+    pub fn paddingTop(self: *Self, amount: u32) *Self {
         self.styles.padding.paddingTop = amount;
         return self;
     }
 
-    pub fn paddingBottom(self: *Self, amount: u16) *Self {
+    pub fn paddingBottom(self: *Self, amount: u32) *Self {
         self.styles.padding.paddingBottom = amount;
         return self;
     }
 
-    pub fn paddingX(self: *Self, amount: u16) *Self {
+    pub fn paddingX(self: *Self, amount: u32) *Self {
         self.styles.padding.paddingLeft = amount;
         self.styles.padding.paddingRight = amount;
         return self;
     }
 
-    pub fn paddingY(self: *Self, amount: u16) *Self {
+    pub fn paddingY(self: *Self, amount: u32) *Self {
         self.styles.padding.paddingTop = amount;
         self.styles.padding.paddingBottom = amount;
         return self;

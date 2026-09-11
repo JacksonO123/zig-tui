@@ -26,19 +26,6 @@ pub const Model = struct {
     }
 };
 
-fn aCellFn(x: u16, y: u16, width: u16, height: u16) ?tui.SimpleDataStyle {
-    _ = width;
-    _ = height;
-    _ = y;
-    const red = tui.RgbColor.from(255, 0, 0);
-
-    if (x % 2 == 0) return .{
-        .bg = .{ .Custom = red },
-    };
-
-    return .{ .bg = .Black };
-}
-
 pub fn main(init: std.process.Init) !void {
     var stdoutBuf: [1024]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &stdoutBuf);
@@ -52,7 +39,7 @@ pub fn main(init: std.process.Init) !void {
         init.gpa.destroy(context);
     }
 
-    try context.on("stdin", .{context}, stdinHandler);
+    try context.on("scroll", .{context.terminal}, scrollHandler);
 
     try context.render(init.io, renderUI, writer);
 }
@@ -60,37 +47,27 @@ pub fn main(init: std.process.Init) !void {
 fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     const allocator = terminal.renderAlloc;
 
-    var text = try tui.Text.fromConstText(allocator, "    ");
-    _ = text.styles.border(.Rounded);
+    const amount = 60;
+    var elements: std.ArrayList(*tui.UIElement) = .empty;
 
-    var text2 = try tui.Text.fromConstText(allocator, "    ");
-    _ = text2.styles.border(.Rounded);
+    var i: usize = 0;
+    while (i < amount) : (i += 1) {
+        const buf = try allocator.alloc(u8, i + 1);
+        @memset(buf, 'a');
+        const text = try tui.Text.fromConstText(allocator, buf);
+        const text2 = try text.clone(allocator);
+        try elements.append(allocator, text);
+        try elements.append(allocator, text2);
+    }
 
-    var layout1 = try tui.Layout.builder(allocator, .Horizontal)
-        .elements(&.{ text2, text })
-        .alignment(.Center)
-        .spacing(.Evenly)
-        .build();
-    _ = layout1.styles.border(.Rounded).cellFn(aCellFn);
-
-    const layout2 = try tui.Layout.builder(allocator, .Horizontal)
-        .elements(&.{layout1})
-        .constraints(&.{
-            .{
-                .width = .Fill,
-            },
-        })
-        .build();
-
-    return layout2;
+    const layout = try tui.Layout.builder(allocator, .Vertical).elements(elements.items).build();
+    return layout;
 }
 
-fn stdinHandler(context: *tui.RenderContext(Model, EventDescription), data: []const u8) !void {
-    _ = data;
-    const rowInQuestion = context.backBuffer.buffer.items[1].items;
-    for (rowInQuestion, 0..) |item, index| {
-        if (item.style.bg == .Custom) {
-            try context.logger.logBufPrint(1024, "({d}): {any}", .{ index, item.style.bg.Custom });
-        }
+fn scrollHandler(terminal: *tui.Terminal(Model, EventDescription), data: tui.events.ScrollEvent) !void {
+    switch (data.direction) {
+        .Up => terminal.scrollOffset += 1,
+        .Down => terminal.scrollOffset -|= 1,
     }
+    terminal.stateChanged();
 }

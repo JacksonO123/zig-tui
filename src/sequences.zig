@@ -63,8 +63,8 @@ pub const codes: Codes = .{
 
 pub fn setCursorPos(
     context: *RenderContext(anyopaque, void),
-    row: u16,
-    col: u16,
+    row: u32,
+    col: u32,
     writer: *Writer,
 ) !void {
     if (row < context.state.rowOffset) {
@@ -80,7 +80,7 @@ pub fn setCursorPos(
     context.state.rowOffset = row;
 }
 
-pub fn setCursorCol(col: u16, writer: *Writer) !void {
+pub fn setCursorCol(col: u32, writer: *Writer) !void {
     try writer.print(codes.setCursorColAbsolute, .{col});
 }
 
@@ -106,8 +106,8 @@ pub fn resetStyles(writer: *Writer) !void {
 
 pub fn setCursorPosAbsolute(
     context: *RenderContext(anyopaque, void),
-    row: u16,
-    col: u16,
+    row: u32,
+    col: u32,
     writer: *Writer,
 ) !void {
     try writer.print(codes.setCursorPosAbsolute, .{ row, col });
@@ -140,7 +140,7 @@ pub fn disableItalicText(writer: *Writer) !void {
 
 pub fn moveCursorUp(
     context: *RenderContext(anyopaque, void),
-    amount: u16,
+    amount: u32,
     writer: *Writer,
 ) !void {
     const moveAmount = if (context.state.rowOffset -| amount == 0)
@@ -154,7 +154,7 @@ pub fn moveCursorUp(
 
 pub fn moveCursorDown(
     context: *RenderContext(anyopaque, void),
-    amount: u16,
+    amount: u32,
     writer: *Writer,
 ) !void {
     try writer.print(codes.moveCursorDown, .{amount});

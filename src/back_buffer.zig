@@ -3,11 +3,11 @@ const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
 const bufferUtil = @import("buffer.zig");
+const logMod = @import("logger.zig");
 const stylesMod = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const ui = @import("ui.zig");
 const utils = @import("utils.zig");
-const logMod = @import("logger.zig");
 
 pub const BackBuffer = struct {
     const Self = @This();
@@ -118,8 +118,8 @@ pub const BackBuffer = struct {
                     var index: usize = 0;
                     while (charIt.nextCodepointSlice()) |chars| : (index += 1) {
                         const pos = utils.Pos{
-                            .x = basePos.x + @as(u16, @intCast(index)),
-                            .y = basePos.y + @as(u16, @intCast(lineIndex)),
+                            .x = basePos.x + @as(u32, @intCast(index)),
+                            .y = basePos.y + @as(u32, @intCast(lineIndex)),
                         };
                         if (chars.len == 1) {
                             try self.writeCharAtPos(allocator, size, pos, chars[0], simpleStyles);
@@ -325,7 +325,7 @@ pub const BackBuffer = struct {
 
             const endY = renderPos.y + layoutInfo.height - 1;
             var currentY: usize = renderPos.y + 1;
-            var index: u16 = 0;
+            var index: u32 = 0;
             while (currentY < endY) : ({
                 currentY += 1;
                 index += 1;

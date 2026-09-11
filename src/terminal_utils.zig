@@ -5,12 +5,12 @@ const builtin = @import("builtin");
 
 const configMod = @import("config.zig");
 const contextMod = @import("context.zig");
+const errors = @import("errors.zig");
+const eventListeners = @import("events/event_listeners.zig");
 const logMod = @import("logger.zig");
 const sequences = @import("sequences.zig");
 const types = @import("types.zig");
 const utils = @import("utils.zig");
-const eventListeners = @import("events/event_listeners.zig");
-const errors = @import("errors.zig");
 
 const globalState = &@import("global.zig").globalState;
 
@@ -269,8 +269,8 @@ fn processTerminalSize(config: configMod.Config, size: utils.Size) utils.Size {
     };
 }
 
-pub fn calculateRightPadding(config: configMod.Config) u16 {
-    return config.rightPadding orelse @as(u16, if (config.screenType == .Main) 1 else 0);
+pub fn calculateRightPadding(config: configMod.Config) u32 {
+    return config.rightPadding orelse @as(u32, if (config.screenType == .Main) 1 else 0);
 }
 
 fn setTermBehavior(config: configMod.Config, writer: *Writer) !void {
@@ -338,10 +338,10 @@ fn getCursorPosition(writer: *Writer) errors.GetCursorPosError!utils.Pos {
     const rowStr = split.next() orelse return errors.GetCursorPosError.InvalidResponse;
     const colStr = split.next() orelse return errors.GetCursorPosError.InvalidResponse;
 
-    const row = std.fmt.parseInt(u16, rowStr, 10) catch {
+    const row = std.fmt.parseInt(u32, rowStr, 10) catch {
         return errors.GetCursorPosError.InvalidResponse;
     };
-    const col = std.fmt.parseInt(u16, colStr, 10) catch {
+    const col = std.fmt.parseInt(u32, colStr, 10) catch {
         return errors.GetCursorPosError.InvalidResponse;
     };
 

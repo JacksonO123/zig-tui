@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
+const errors = @import("errors.zig");
 const sequences = @import("sequences.zig");
 const stylesMod = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
@@ -99,10 +100,20 @@ fn writeDiff(
     writer: *Writer,
 ) !void {
     try context.frontBuffer.matchSize(allocator, context.backBuffer.lineLimit, size.width);
+    if (context.frontBuffer.lineLimit != context.backBuffer.lineLimit) {
+        return errors.WriteDiffError.BufferSizeMismatch;
+    }
 
+    const lineLimit = @min(context.backBuffer.lineLimit, context.terminalUtils.size.height);
     var atCol: usize = 0;
-    const frontBufferLines = context.frontBuffer.buffer.items[0..context.frontBuffer.lineLimit];
-    const backBufferLines = context.backBuffer.buffer.items[0..context.backBuffer.lineLimit];
+
+    const start = @min(
+        context.terminal.scrollOffset,
+        context.backBuffer.lineLimit -| context.terminalUtils.size.height,
+    );
+    const frontBufferLines = context.frontBuffer.buffer.items[0..lineLimit];
+    const backBufferLines = context.backBuffer.buffer.items[start .. lineLimit + start];
+
     const rightPadding = terminalUtils.calculateRightPadding(context.config);
     for (frontBufferLines, backBufferLines, 0..) |frontLine, backLine, rowIndex| {
         for (frontLine.items, backLine.items, 0..) |frontCell, backCell, cellIndex| {

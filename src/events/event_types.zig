@@ -1,5 +1,5 @@
-const utils = @import("../utils.zig");
 const types = @import("../types.zig");
+const utils = @import("../utils.zig");
 
 pub const StdinEvent = struct { []const u8 };
 
@@ -17,8 +17,8 @@ pub const ScrollEventWrapper = struct { ScrollEvent };
 
 pub const MouseEvent = struct {
     button: u8,
-    x: u16,
-    y: u16,
+    x: u32,
+    y: u32,
     pressed: bool,
 };
 
@@ -32,8 +32,8 @@ pub const MouseButtonEvent = struct {
     const Self = @This();
 
     button: MouseEventButton,
-    x: u16,
-    y: u16,
+    x: u32,
+    y: u32,
     pressed: bool,
 
     pub fn toPos(self: Self) utils.Pos {

@@ -4,18 +4,18 @@ const Allocator = std.mem.Allocator;
 const components = @import("components.zig");
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
+const errors = @import("errors.zig");
 const stylesMod = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const utils = @import("utils.zig");
-const errors = @import("errors.zig");
 
 pub const ElementLayoutInfo = struct {
     const Self = @This();
 
-    width: u16 = 0,
-    height: u16 = 1,
-    xOffset: u16 = 0,
-    yOffset: u16 = 0,
+    width: u32 = 0,
+    height: u32 = 1,
+    xOffset: u32 = 0,
+    yOffset: u32 = 0,
 
     pub fn offsetToPos(self: Self) utils.Pos {
         return .{
@@ -47,6 +47,13 @@ pub const UIElement = struct {
         ptr.* = self;
         return ptr;
     }
+
+    pub fn clone(self: *Self, allocator: Allocator) !*UIElement {
+        return switch (self.variant) {
+            .Text => |text| text.clone(allocator),
+            .Layout => |layout| layout.clone(allocator),
+        };
+    }
 };
 
 const ConstraintTypes = enum {
@@ -61,13 +68,13 @@ const ConstraintTypes = enum {
 
 const ConstraintValues = union(ConstraintTypes) {
     Ratio: struct {
-        numerator: u16,
-        denominator: u16,
+        numerator: u32,
+        denominator: u32,
     },
     Percent: f64,
-    Value: u16,
-    Min: u16,
-    Max: u16,
+    Value: u32,
+    Min: u32,
+    Max: u32,
     None,
     Fill,
 };
@@ -83,9 +90,9 @@ const TextRenderUtil = struct {
     preAdjust: utils.Size,
     postAdjust: utils.Size,
     sizeConstraint: utils.Size,
-    height: u16 = 1,
-    width: u16 = 0,
-    currentX: u16 = 0,
+    height: u32 = 1,
+    width: u32 = 0,
+    currentX: u32 = 0,
     lines: std.ArrayList([]u8) = .empty,
     line: std.ArrayList(u8) = .empty,
     styles: *stylesMod.Styles,
@@ -142,7 +149,7 @@ const TextRenderUtil = struct {
         return self.currentX + self.preAdjust.width + self.postAdjust.width >= self.sizeConstraint.width;
     }
 
-    fn calculateCurrentHeight(self: Self) u16 {
+    fn calculateCurrentHeight(self: Self) u32 {
         return self.height + self.preAdjust.height + self.postAdjust.height;
     }
 
@@ -266,18 +273,18 @@ pub fn setElementDimensions(
     element.layoutInfo = elInfo;
 }
 
-fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u16, fillSize: ?u16) u16 {
+fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u32, fillSize: ?u32) u32 {
     return switch (cons) {
         .Min => |value| @max(value, dimensionConstraint),
         .Max => |value| @min(value, dimensionConstraint),
         .Ratio => |value| {
             const percent = @as(f32, @floatFromInt(value.numerator)) /
                 @as(f32, @floatFromInt(value.denominator));
-            const width = @round(dimensionConstraint * percent);
+            const width = @round(@as(f32, @floatFromInt(dimensionConstraint)) * percent);
             return @intFromFloat(width);
         },
         .Percent => |value| {
-            const width = @round(dimensionConstraint * value);
+            const width = @round(@as(f32, @floatFromInt(dimensionConstraint)) * value);
             return @intFromFloat(width);
         },
         .Value => |value| value,
@@ -289,8 +296,8 @@ fn applySizeConstraint(cons: ConstraintValues, dimensionConstraint: u16, fillSiz
 fn getSizeConstraint(
     currentSize: utils.Size,
     constraint: Constraint,
-    fillWidthPerEl: ?u16,
-    fillHeightPerEl: ?u16,
+    fillWidthPerEl: ?u32,
+    fillHeightPerEl: ?u32,
 ) utils.Size {
     var sizeCpy = currentSize;
 
@@ -328,7 +335,7 @@ pub fn getPostAdjustment(styles: stylesMod.Styles) utils.Size {
     return adjustment;
 }
 
-fn trimTextElContentToWidth(el: *UIElement, width: u16) void {
+fn trimTextElContentToWidth(el: *UIElement, width: u32) void {
     if (el.variant != .Text) return;
 
     for (el.variant.Text.renderedData) |*line| {
@@ -571,7 +578,7 @@ fn setLayoutDimensions(
         );
     }
 
-    var elSizes = try allocator.alloc(u16, fillSizeIndices.items.len);
+    var elSizes = try allocator.alloc(u32, fillSizeIndices.items.len);
     defer allocator.free(elSizes);
 
     var fillItemCount = fillSizeIndices.items.len;
@@ -581,12 +588,12 @@ fn setLayoutDimensions(
         i += 1;
         fillItemCount -= 1;
     }) {
-        const amount = remainingSizeBudget / @as(u16, @intCast(fillItemCount));
+        const amount = remainingSizeBudget / @as(u32, @intCast(fillItemCount));
         elSizes[i] = amount;
         remainingSizeBudget -= amount;
     }
 
-    const numElsMinusOne: u16 = @intCast(layout.data.elements.len -| 1);
+    const numElsMinusOne: u32 = @intCast(layout.data.elements.len -| 1);
 
     const usedSize = originalSizeConstraint - possibleFillSize;
     const finalSize = a: {
@@ -611,13 +618,13 @@ fn setLayoutDimensions(
 
     var gapAmount = switch (layout.data.spacing) {
         .Normal => 0,
-        .Between => (availableFillSize / @as(u16, @max(1, numElsMinusOne))) + (layout.data.gap * numElsMinusOne),
+        .Between => (availableFillSize / @as(u32, @max(1, numElsMinusOne))) + (layout.data.gap * numElsMinusOne),
         .Evenly => availableFillSize / @as(
-            u16,
+            u32,
             @intCast(layout.data.elements.len + 1),
         ),
     };
-    var sizeAcc: u16 = switch (layout.data.alignment) {
+    var sizeAcc: u32 = switch (layout.data.alignment) {
         .Start => 0,
         .Center => if (layout.data.spacing == .Normal) availableFillSize / 2 else 0,
         .End => if (layout.data.spacing == .Normal) availableFillSize else 0,

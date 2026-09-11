@@ -12,3 +12,7 @@ pub const GetCursorPosError = error{
 } || Writer.Error || std.posix.ReadError;
 
 pub const GetTermSizeError = error{FailedToGetSize};
+
+pub const WriteDiffError = error{
+    BufferSizeMismatch,
+};
