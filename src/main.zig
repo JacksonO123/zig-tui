@@ -39,35 +39,18 @@ pub fn main(init: std.process.Init) !void {
         init.gpa.destroy(context);
     }
 
-    try context.on("scroll", .{context.terminal}, scrollHandler);
-
     try context.render(init.io, renderUI, writer);
 }
 
 fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     const allocator = terminal.renderAlloc;
 
-    const amount = 60;
-    var elements: std.ArrayList(*tui.UIElement) = .empty;
+    var input = try tui.Input.builder(allocator)
+        .id("test-id")
+        .focused(true)
+        .placeholder("testing")
+        .build();
+    _ = input.styles.border(.Rounded);
 
-    var i: usize = 0;
-    while (i < amount) : (i += 1) {
-        const buf = try allocator.alloc(u8, i + 1);
-        @memset(buf, 'a');
-        const text = try tui.Text.fromConstText(allocator, buf);
-        const text2 = try text.clone(allocator);
-        try elements.append(allocator, text);
-        try elements.append(allocator, text2);
-    }
-
-    const layout = try tui.Layout.builder(allocator, .Vertical).elements(elements.items).build();
-    return layout;
-}
-
-fn scrollHandler(terminal: *tui.Terminal(Model, EventDescription), data: tui.events.ScrollEvent) !void {
-    switch (data.direction) {
-        .Up => terminal.nextRenderScrollInc += 1,
-        .Down => terminal.nextRenderScrollInc -|= 1,
-    }
-    terminal.stateChanged();
+    return input;
 }

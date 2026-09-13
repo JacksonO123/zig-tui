@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const constants = @import("constants.zig");
+const types = @import("types.zig");
 const ui = @import("ui.zig");
 
 pub const Text = struct {
@@ -151,66 +152,97 @@ pub const Layout = struct {
 };
 
 pub const Input = struct {
+    const InputData = struct {
+        id: []const u8 = &.{},
+        placeholder: ?[]const u8 = null,
+        value: []const u8 = &.{},
+        focused: bool = false,
+    };
+
+    const InputBuildError = error{
+        InputIdCannotBeEmpty,
+    };
+
+    const InputBuilder = struct {
+        const BuilderSelf = @This();
+
+        allocator: Allocator,
+        data: InputData,
+
+        pub fn build(self: BuilderSelf) !*ui.UIElement {
+            if (self.data.id.len == 0) return InputBuildError.InputIdCannotBeEmpty;
+            return try internalInit(
+                self.allocator,
+                self.data.id,
+                self.data.value,
+                self.data.placeholder,
+                self.data.focused,
+            );
+        }
+
+        pub fn id(self: *BuilderSelf, inputId: []const u8) *BuilderSelf {
+            self.data.id = inputId;
+            return self;
+        }
+
+        pub fn placeholder(self: *BuilderSelf, inputPlaceholder: []const u8) *BuilderSelf {
+            self.data.placeholder = inputPlaceholder;
+            return self;
+        }
+
+        pub fn value(self: *BuilderSelf, inputValue: []const u8) *BuilderSelf {
+            self.data.value = inputValue;
+            return self;
+        }
+
+        pub fn focused(self: *BuilderSelf, inputFocused: bool) *BuilderSelf {
+            self.data.focused = inputFocused;
+            return self;
+        }
+    };
+
     fn internalInit(
         allocator: Allocator,
         id: []const u8,
         value: []const u8,
-        isPlaceholder: bool,
+        placeholder: ?[]const u8,
         focused: bool,
     ) !*ui.UIElement {
-        const str = if (!isPlaceholder and focused)
-            try std.fmt.allocPrint(allocator, "{s}{s}", .{ value, "⎸" })
+        const renderStr = if (placeholder) |str| if (value.len == 0) str else value else value;
+
+        const str = if (focused)
+            try std.fmt.allocPrint(allocator, "{s}{s}", .{ renderStr, "⎸" })
         else
             value;
 
         var text = try Text.fromConstText(allocator, str);
-        if (isPlaceholder) {
+        if (placeholder != null and value.len == 0) {
             _ = text.styles.fg(constants.colors.gray);
         }
 
-        const innerLayout = try Layout.fromElementsAndConstraints(
-            allocator,
-            &.{text},
-            &.{.{
+        const innerLayout = try Layout.builder(allocator, .Horizontal)
+            .elements(&.{text})
+            .constraints(&.{.{
                 .width = .{ .Min = 24 },
-            }},
-            .Horizontal,
-        );
+            }})
+            .build();
 
-        const layout = try Layout.fromElementsAndConstraints(
-            allocator,
-            &.{innerLayout},
-            &.{.{ .width = .{ .Max = 64 } }},
-            .Horizontal,
-        );
+        const layout = try Layout.builder(allocator, .Horizontal)
+            .elements(&.{innerLayout})
+            .constraints(&.{.{
+                .width = .{ .Max = 64 },
+            }})
+            .build();
         layout.id = id;
 
         return layout;
     }
 
-    pub fn fromValue(
-        allocator: Allocator,
-        id: []const u8,
-        value: []const u8,
-        focused: bool,
-    ) !*ui.UIElement {
-        return internalInit(allocator, id, value, false, focused);
-    }
-
-    pub fn fromValueAndPlaceholder(
-        allocator: Allocator,
-        id: []const u8,
-        value: []const u8,
-        placeholder: []const u8,
-        focused: bool,
-    ) !*ui.UIElement {
-        return internalInit(
-            allocator,
-            id,
-            if (value.len == 0) placeholder else value,
-            value.len == 0,
-            focused,
-        );
+    pub inline fn builder(allocator: Allocator) *InputBuilder {
+        return @constCast(&InputBuilder{
+            .allocator = allocator,
+            .data = .{},
+        });
     }
 };
 
