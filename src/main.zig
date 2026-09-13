@@ -66,8 +66,8 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
 
 fn scrollHandler(terminal: *tui.Terminal(Model, EventDescription), data: tui.events.ScrollEvent) !void {
     switch (data.direction) {
-        .Up => terminal.scrollOffset += 1,
-        .Down => terminal.scrollOffset -|= 1,
+        .Up => terminal.nextRenderScrollInc += 1,
+        .Down => terminal.nextRenderScrollInc -|= 1,
     }
     terminal.stateChanged();
 }

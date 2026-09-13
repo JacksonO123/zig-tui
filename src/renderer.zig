@@ -35,6 +35,7 @@ pub fn handleRender(
 
     globalState.rendering = true;
     defer globalState.rendering = false;
+    defer context.terminal.nextRenderScrollInc = 0;
 
     const el = try renderUI(context.terminal);
     context.rendered = el;
@@ -76,6 +77,13 @@ pub fn render(
         );
     }
     try context.backBuffer.renderInBuffer(allocator, el, context.terminalUtils.size, .{}, .{});
+
+    context.state.scrollOffset = @min(
+        @as(u32, @intCast(@max(@as(i32, @intCast(context.state.scrollOffset)) +|
+            context.terminal.nextRenderScrollInc, 0))),
+        context.backBuffer.lineLimit -| context.terminalUtils.size.height,
+    );
+
     try writeDiff(allocator, context, context.terminalUtils.size, writer);
 
     try sequences.resetStyles(writer);
@@ -107,12 +115,9 @@ fn writeDiff(
     const lineLimit = @min(context.backBuffer.lineLimit, context.terminalUtils.size.height);
     var atCol: usize = 0;
 
-    const start = @min(
-        context.terminal.scrollOffset,
-        context.backBuffer.lineLimit -| context.terminalUtils.size.height,
-    );
     const frontBufferLines = context.frontBuffer.buffer.items[0..lineLimit];
-    const backBufferLines = context.backBuffer.buffer.items[start .. lineLimit + start];
+    const scrollOffset = context.state.scrollOffset;
+    const backBufferLines = context.backBuffer.buffer.items[scrollOffset .. lineLimit + scrollOffset];
 
     const rightPadding = terminalUtils.calculateRightPadding(context.config);
     for (frontBufferLines, backBufferLines, 0..) |frontLine, backLine, rowIndex| {

@@ -19,7 +19,7 @@ pub fn Terminal(comptime ModelType: type, comptime RegisterEvents: type) type {
         model: *ModelType,
         logger: *logMod.Logger,
         listeners: *EventListenerCollection,
-        scrollOffset: u32 = 0,
+        nextRenderScrollInc: i32 = 0,
 
         pub fn init(
             allocator: Allocator,
