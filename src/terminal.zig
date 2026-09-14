@@ -68,7 +68,9 @@ pub fn Terminal(comptime ModelType: type, comptime RegisterEvents: type) type {
         pub fn setNextRenderCursorInfo(self: *Self, info: ui.CursorInfo) bool {
             var copy = info;
             if (info.onElement.variant != .Text) return false;
-            copy.position = @min(info.position, info.onElement.variant.Text.data.len);
+            if (copy.position == .Value) {
+                copy.position.Value = @min(info.position.Value, info.onElement.variant.Text.data.len);
+            }
             self.nextRenderCursorInfo = copy;
             return true;
         }

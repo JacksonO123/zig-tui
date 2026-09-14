@@ -62,10 +62,16 @@ pub const CursorTypes = enum {
     Underline,
 };
 
+const CursorPosition = union(enum) {
+    Value: u32,
+    Beginning,
+    After,
+};
+
 pub const CursorInfo = struct {
     onElement: *UIElement,
     style: CursorTypes,
-    position: u32,
+    position: CursorPosition,
 };
 
 const ConstraintTypes = enum {
@@ -509,10 +515,6 @@ fn setLayoutDimensions(
                 cons,
             };
         } else .{ sizeConstraint, Constraint{} };
-
-        if (preAdjust.width != 0) {
-            std.log.err("{}", .{element.*});
-        }
 
         const innerElPos = utils.Pos{
             .x = preAdjust.width,

@@ -187,7 +187,7 @@ pub const Input = struct {
             _ = self.terminal.setNextRenderCursorInfo(.{
                 .onElement = text,
                 .style = self.data.cursorStyle,
-                .position = 0,
+                .position = if (self.data.value.len == 0) .Beginning else .After,
             });
 
             const innerLayout = try Layout.builder(self.allocator, .Horizontal)

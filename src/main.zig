@@ -16,13 +16,14 @@ const EventDescription = tui.formatRegisteredEvents(tui.baseEvents ++ customEven
 pub const Model = struct {
     const Self = @This();
 
+    text: std.ArrayList(u8) = .empty,
+
     pub fn init() Self {
         return .{};
     }
 
     pub fn deinit(self: *Self, gpa: Allocator) void {
-        _ = self;
-        _ = gpa;
+        self.text.deinit(gpa);
     }
 };
 
@@ -39,6 +40,8 @@ pub fn main(init: std.process.Init) !void {
         init.gpa.destroy(context);
     }
 
+    try context.on("stdin", .{context.terminal}, stdinHandler);
+
     try context.render(init.io, renderUI, writer);
 }
 
@@ -48,9 +51,19 @@ fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     var input = try tui.Input.builder(allocator, terminal)
         .id("test-id")
         .focused(true)
-        .placeholder(" testing")
+        .placeholder("Type something")
+        .value(terminal.model.text.items)
         .build();
     _ = input.styles.border(.Rounded);
 
     return input;
+}
+
+fn stdinHandler(terminal: *tui.Terminal(Model, EventDescription), data: []const u8) !void {
+    if (data.len == 1 and data[0] == tui.keys.Backspace) {
+        _ = terminal.model.text.pop();
+    } else {
+        try terminal.model.text.appendSlice(terminal.gpa, data);
+    }
+    terminal.stateChanged();
 }

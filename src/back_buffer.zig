@@ -136,7 +136,7 @@ pub const BackBuffer = struct {
                         };
 
                         if (watchPosition) |position| {
-                            if (position == currentPos) {
+                            if (position == .Value and position.Value == currentPos) {
                                 context.state.cursorInfo = .{
                                     .cellPos = pos,
                                     .style = cursorInfo.?.style,
@@ -150,6 +150,29 @@ pub const BackBuffer = struct {
                             try self.writeUnicodeAtPos(allocator, size, pos, chars, simpleStyles);
                         }
                     }
+                }
+
+                if (watchPosition) |position| a: {
+                    const pos: utils.Pos = switch (position) {
+                        .Beginning => basePos,
+                        .After => b: {
+                            if (text.renderedData.len == 0) break :b basePos;
+                            const lastTextRowLen = text.renderedData[text.renderedData.len - 1].len;
+                            const col: u32 = if (lastTextRowLen < element.layoutInfo.width)
+                                @intCast(lastTextRowLen + 1)
+                            else
+                                break :a;
+                            break :b .{
+                                .x = col,
+                                .y = basePos.y + (@as(u32, @intCast(text.renderedData.len)) -| 1),
+                            };
+                        },
+                        .Value => break :a,
+                    };
+                    context.state.cursorInfo = .{
+                        .cellPos = pos,
+                        .style = cursorInfo.?.style,
+                    };
                 }
             },
             .Layout => |layout| {
