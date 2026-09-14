@@ -510,6 +510,10 @@ fn setLayoutDimensions(
             };
         } else .{ sizeConstraint, Constraint{} };
 
+        if (preAdjust.width != 0) {
+            std.log.err("{}", .{element.*});
+        }
+
         const innerElPos = utils.Pos{
             .x = preAdjust.width,
             .y = preAdjust.height,
@@ -702,15 +706,6 @@ fn setLayoutDimensions(
                     },
                 }
             }
-        }
-
-        switch (layoutType) {
-            .Horizontal => {
-                el.layoutInfo.xOffset = elInfo.xOffset + preAdjust.width + sizeAcc;
-            },
-            .Vertical => {
-                el.layoutInfo.yOffset = elInfo.yOffset + preAdjust.height + sizeAcc;
-            },
         }
 
         switch (layoutType) {

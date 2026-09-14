@@ -71,7 +71,7 @@ pub const codes: Codes = .{
     .hideCursor = "\x1b[?25l",
     .showCursor = "\x1b[?25h",
     .setCursorStyleBlock = "\x1b[2 q",
-    .setCursorStyleIBeam = "\x1b[3 q",
+    .setCursorStyleIBeam = "\x1b[5 q",
     .setCursorStyleUnderline = "\x1b[4 q",
 };
 

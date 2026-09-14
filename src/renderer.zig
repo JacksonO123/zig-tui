@@ -44,7 +44,7 @@ pub fn handleRender(
     context.rendered = el;
     try render(gpa, @ptrCast(context), el, writer);
     if (context.state.cursorInfo) |cursorInfo| {
-        try sequences.setCursorPos(@ptrCast(context), cursorInfo.cellPos.y, cursorInfo.cellPos.x, writer);
+        try sequences.setCursorPos(@ptrCast(context), cursorInfo.cellPos.y, cursorInfo.cellPos.x + 1, writer);
         try sequences.setCursorStyle(cursorInfo.style, writer);
         try sequences.showCursor(writer);
     }

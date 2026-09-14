@@ -45,16 +45,12 @@ pub fn main(init: std.process.Init) !void {
 fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     const allocator = terminal.renderAlloc;
 
-    // var input = try tui.Input.builder(allocator, terminal)
-    //     .id("test-id")
-    //     .focused(true)
-    //     .placeholder("testing")
-    //     .build();
-    // _ = input.styles.border(.Rounded);
-    const text = try tui.Text.fromConstText(allocator, "here");
-    const layout = try tui.Layout.builder(allocator, .Horizontal).elements(&.{text}).build();
-    var layout2 = try tui.Layout.builder(allocator, .Horizontal).elements(&.{layout}).build();
-    _ = layout2.styles.border(.Rounded);
+    var input = try tui.Input.builder(allocator, terminal)
+        .id("test-id")
+        .focused(true)
+        .placeholder(" testing")
+        .build();
+    _ = input.styles.border(.Rounded);
 
-    return layout2;
+    return input;
 }

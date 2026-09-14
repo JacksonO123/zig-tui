@@ -158,6 +158,7 @@ pub const Input = struct {
         placeholder: ?[]const u8 = null,
         value: []const u8 = &.{},
         focused: bool = false,
+        cursorStyle: ui.CursorTypes = .IBeam,
     };
 
     const InputBuildError = error{
@@ -185,7 +186,7 @@ pub const Input = struct {
 
             _ = self.terminal.setNextRenderCursorInfo(.{
                 .onElement = text,
-                .style = .Block,
+                .style = self.data.cursorStyle,
                 .position = 0,
             });
 
@@ -224,6 +225,11 @@ pub const Input = struct {
 
         pub fn focused(self: *BuilderSelf, inputFocused: bool) *BuilderSelf {
             self.data.focused = inputFocused;
+            return self;
+        }
+
+        pub fn cursorStyle(self: *BuilderSelf, inputCursorStyle: ui.CursorTypes) *BuilderSelf {
+            self.data.cursorStyle = inputCursorStyle;
             return self;
         }
     };
