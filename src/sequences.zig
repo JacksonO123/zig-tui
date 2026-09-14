@@ -4,6 +4,7 @@ const Writer = std.Io.Writer;
 const contextMod = @import("context.zig");
 const RenderContext = contextMod.RenderContext;
 const stylesMod = @import("styles.zig");
+const ui = @import("ui.zig");
 
 const Codes = struct {
     const Str = []const u8;
@@ -32,6 +33,12 @@ const Codes = struct {
 
     enableAlternateScreen: Str,
     disableAlternateScreen: Str,
+
+    enableMouseReporting: Str,
+    disableMouseReporting: Str,
+    setCursorStyleBlock: Str,
+    setCursorStyleIBeam: Str,
+    setCursorStyleUnderline: Str,
 };
 
 pub const codes: Codes = .{
@@ -44,8 +51,6 @@ pub const codes: Codes = .{
     .enableAutoWrap = "\x1b[?7h",
     .clearScreen = "\x1b[2J",
     .resetStyles = "\x1b[0m",
-    .hideCursor = "\x1b[?25l",
-    .showCursor = "\x1b[?25h",
     .requestCursorPosition = "\x1b[6n",
 
     .boldText = "\x1b[1m",
@@ -59,6 +64,15 @@ pub const codes: Codes = .{
 
     .enableAlternateScreen = "\x1b[?1049h",
     .disableAlternateScreen = "\x1b[?1049l",
+
+    .enableMouseReporting = "\x1b[?1000h\x1b[?1006h",
+    .disableMouseReporting = "\x1b[?1000l\x1b[?1006l",
+
+    .hideCursor = "\x1b[?25l",
+    .showCursor = "\x1b[?25h",
+    .setCursorStyleBlock = "\x1b[2 q",
+    .setCursorStyleIBeam = "\x1b[3 q",
+    .setCursorStyleUnderline = "\x1b[4 q",
 };
 
 pub fn setCursorPos(
@@ -240,11 +254,18 @@ pub fn requestCursorPosition(writer: *Writer) !void {
 }
 
 pub fn enableMouseReporting(writer: *Writer) !void {
-    try writer.writeAll("\x1b[?1000h");
-    try writer.writeAll("\x1b[?1006h");
+    try writer.writeAll(codes.enableMouseReporting);
 }
 
 pub fn disableMouseReporting(writer: *Writer) !void {
-    try writer.writeAll("\x1b[?1000l");
-    try writer.writeAll("\x1b[?1006l");
+    try writer.writeAll(codes.disableMouseReporting);
+}
+
+pub fn setCursorStyle(style: ui.CursorTypes, writer: *Writer) !void {
+    const code = switch (style) {
+        .Block => codes.setCursorStyleBlock,
+        .IBeam => codes.setCursorStyleIBeam,
+        .Underline => codes.setCursorStyleUnderline,
+    };
+    try writer.writeAll(code);
 }

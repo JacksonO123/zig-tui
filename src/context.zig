@@ -24,11 +24,17 @@ pub const debugConfig = .{
     // .setBehavior = false,
 };
 
+const RenderCursorInfo = struct {
+    cellPos: utils.Pos,
+    style: ui.CursorTypes,
+};
+
 pub const RenderState = struct {
     rowOffset: u32 = 1,
     forceFullRender: bool = false,
     focusedId: ?[]const u8 = null,
     scrollOffset: u32 = 0,
+    cursorInfo: ?RenderCursorInfo = null,
 };
 
 pub fn RenderContext(comptime ModelType: type, comptime RegisterEvents: type) type {

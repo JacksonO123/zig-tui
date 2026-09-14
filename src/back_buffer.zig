@@ -4,6 +4,7 @@ const Writer = std.Io.Writer;
 
 const bufferUtil = @import("buffer.zig");
 const logMod = @import("logger.zig");
+const RenderContext = @import("context.zig").RenderContext;
 const stylesMod = @import("styles.zig");
 const terminalUtils = @import("terminal_utils.zig");
 const ui = @import("ui.zig");
@@ -54,11 +55,13 @@ pub const BackBuffer = struct {
     pub fn renderInBuffer(
         self: *Self,
         allocator: Allocator,
+        context: *RenderContext(anyopaque, void),
         element: *ui.UIElement,
-        size: utils.Size,
         relativeWritePosAcc: utils.Pos,
         absoluteWritePosAcc: utils.Pos,
     ) !void {
+        const size = context.terminalUtils.size;
+
         const preAdjust = ui.getPreAdjustment(element.styles);
         const postAdjust = ui.getPostAdjustment(element.styles);
         const simpleStyles = element.styles.toSimpleStyles();
@@ -112,15 +115,35 @@ pub const BackBuffer = struct {
                     .y = renderPos.y + preAdjust.height,
                 };
 
+                const cursorInfo = context.terminal.nextRenderCursorInfo;
+                const watchPosition = if (cursorInfo) |info|
+                    if (info.onElement == element) info.position else null
+                else
+                    null;
+
+                var currentPos: usize = 0;
                 for (text.renderedData, 0..) |line, lineIndex| {
                     const utf8View = try std.unicode.Utf8View.init(line);
                     var charIt = utf8View.iterator();
                     var index: usize = 0;
-                    while (charIt.nextCodepointSlice()) |chars| : (index += 1) {
+                    while (charIt.nextCodepointSlice()) |chars| : ({
+                        index += 1;
+                        currentPos += 1;
+                    }) {
                         const pos = utils.Pos{
                             .x = basePos.x + @as(u32, @intCast(index)),
                             .y = basePos.y + @as(u32, @intCast(lineIndex)),
                         };
+
+                        if (watchPosition) |position| {
+                            if (position == currentPos) {
+                                context.state.cursorInfo = .{
+                                    .cellPos = pos,
+                                    .style = cursorInfo.?.style,
+                                };
+                            }
+                        }
+
                         if (chars.len == 1) {
                             try self.writeCharAtPos(allocator, size, pos, chars[0], simpleStyles);
                         } else {
@@ -134,8 +157,8 @@ pub const BackBuffer = struct {
                     const el = elOrNull orelse continue;
                     try self.renderInBuffer(
                         allocator,
+                        context,
                         el,
-                        size,
                         renderPos,
                         newAbsoluteWritePosAcc,
                     );

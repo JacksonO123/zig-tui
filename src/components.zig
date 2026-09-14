@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const constants = @import("constants.zig");
 const types = @import("types.zig");
 const ui = @import("ui.zig");
+const termMod = @import("terminal.zig");
 
 pub const Text = struct {
     const Self = @This();
@@ -167,17 +168,43 @@ pub const Input = struct {
         const BuilderSelf = @This();
 
         allocator: Allocator,
+        terminal: *termMod.Terminal(anyopaque, void),
         data: InputData,
 
         pub fn build(self: BuilderSelf) !*ui.UIElement {
             if (self.data.id.len == 0) return InputBuildError.InputIdCannotBeEmpty;
-            return try internalInit(
-                self.allocator,
-                self.data.id,
-                self.data.value,
-                self.data.placeholder,
-                self.data.focused,
-            );
+            const renderStr = if (self.data.placeholder) |str|
+                if (self.data.value.len == 0) str else self.data.value
+            else
+                self.data.value;
+
+            var text = try Text.fromConstText(self.allocator, renderStr);
+            if (self.data.placeholder != null and self.data.value.len == 0) {
+                _ = text.styles.fg(constants.colors.gray);
+            }
+
+            _ = self.terminal.setNextRenderCursorInfo(.{
+                .onElement = text,
+                .style = .Block,
+                .position = 0,
+            });
+
+            const innerLayout = try Layout.builder(self.allocator, .Horizontal)
+                .elements(&.{text})
+                .constraints(&.{.{
+                    .width = .{ .Min = 24 },
+                }})
+                .build();
+
+            const layout = try Layout.builder(self.allocator, .Horizontal)
+                .elements(&.{innerLayout})
+                .constraints(&.{.{
+                    .width = .{ .Max = 64 },
+                }})
+                .build();
+            layout.id = self.data.id;
+
+            return layout;
         }
 
         pub fn id(self: *BuilderSelf, inputId: []const u8) *BuilderSelf {
@@ -201,46 +228,10 @@ pub const Input = struct {
         }
     };
 
-    fn internalInit(
-        allocator: Allocator,
-        id: []const u8,
-        value: []const u8,
-        placeholder: ?[]const u8,
-        focused: bool,
-    ) !*ui.UIElement {
-        const renderStr = if (placeholder) |str| if (value.len == 0) str else value else value;
-
-        const str = if (focused)
-            try std.fmt.allocPrint(allocator, "{s}{s}", .{ renderStr, "⎸" })
-        else
-            value;
-
-        var text = try Text.fromConstText(allocator, str);
-        if (placeholder != null and value.len == 0) {
-            _ = text.styles.fg(constants.colors.gray);
-        }
-
-        const innerLayout = try Layout.builder(allocator, .Horizontal)
-            .elements(&.{text})
-            .constraints(&.{.{
-                .width = .{ .Min = 24 },
-            }})
-            .build();
-
-        const layout = try Layout.builder(allocator, .Horizontal)
-            .elements(&.{innerLayout})
-            .constraints(&.{.{
-                .width = .{ .Max = 64 },
-            }})
-            .build();
-        layout.id = id;
-
-        return layout;
-    }
-
-    pub inline fn builder(allocator: Allocator) *InputBuilder {
+    pub inline fn builder(allocator: Allocator, terminal: anytype) *InputBuilder {
         return @constCast(&InputBuilder{
             .allocator = allocator,
+            .terminal = @ptrCast(terminal),
             .data = .{},
         });
     }

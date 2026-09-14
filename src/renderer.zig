@@ -26,6 +26,7 @@ pub fn handleRender(
     renderUI: RenderUIFn(ModelType, RegisteredEvents),
     writer: *Writer,
 ) !void {
+    try sequences.hideCursor(writer);
     const success = try context.terminalUtils.prepareForReRender(
         @ptrCast(context.eventListeners),
         writer,
@@ -36,10 +37,19 @@ pub fn handleRender(
     globalState.rendering = true;
     defer globalState.rendering = false;
     defer context.terminal.nextRenderScrollInc = 0;
+    defer context.terminal.nextRenderCursorInfo = null;
+    defer context.state.cursorInfo = null;
 
     const el = try renderUI(context.terminal);
     context.rendered = el;
     try render(gpa, @ptrCast(context), el, writer);
+    if (context.state.cursorInfo) |cursorInfo| {
+        try sequences.setCursorPos(@ptrCast(context), cursorInfo.cellPos.y, cursorInfo.cellPos.x, writer);
+        try sequences.setCursorStyle(cursorInfo.style, writer);
+        try sequences.showCursor(writer);
+    }
+
+    try writer.flush();
 }
 
 pub fn render(
@@ -76,7 +86,7 @@ pub fn render(
             },
         );
     }
-    try context.backBuffer.renderInBuffer(allocator, el, context.terminalUtils.size, .{}, .{});
+    try context.backBuffer.renderInBuffer(allocator, context, el, .{}, .{});
 
     context.state.scrollOffset = @min(
         @as(u32, @intCast(@max(@as(i32, @intCast(context.state.scrollOffset)) +|
@@ -97,8 +107,6 @@ pub fn render(
     }
 
     context.state.forceFullRender = false;
-
-    try writer.flush();
 }
 
 fn writeDiff(

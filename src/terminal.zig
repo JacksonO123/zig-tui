@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const eventListenersMod = @import("events/event_listeners.zig");
 const logMod = @import("logger.zig");
 const terminalUtils = @import("terminal_utils.zig");
+const ui = @import("ui.zig");
 
 const globalState = &@import("global.zig").globalState;
 
@@ -20,6 +21,7 @@ pub fn Terminal(comptime ModelType: type, comptime RegisterEvents: type) type {
         logger: *logMod.Logger,
         listeners: *EventListenerCollection,
         nextRenderScrollInc: i32 = 0,
+        nextRenderCursorInfo: ?ui.CursorInfo = null,
 
         pub fn init(
             allocator: Allocator,
@@ -60,6 +62,15 @@ pub fn Terminal(comptime ModelType: type, comptime RegisterEvents: type) type {
             comptime handler: anytype,
         ) !void {
             try self.listeners.onTemporary(name, baseArgs, handler);
+        }
+
+        /// returns true on success
+        pub fn setNextRenderCursorInfo(self: *Self, info: ui.CursorInfo) bool {
+            var copy = info;
+            if (info.onElement.variant != .Text) return false;
+            copy.position = @min(info.position, info.onElement.variant.Text.data.len);
+            self.nextRenderCursorInfo = copy;
+            return true;
         }
     };
 }

@@ -56,6 +56,18 @@ pub const UIElement = struct {
     }
 };
 
+pub const CursorTypes = enum {
+    IBeam,
+    Block,
+    Underline,
+};
+
+pub const CursorInfo = struct {
+    onElement: *UIElement,
+    style: CursorTypes,
+    position: u32,
+};
+
 const ConstraintTypes = enum {
     Ratio,
     Percent,
