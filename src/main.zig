@@ -48,15 +48,19 @@ pub fn main(init: std.process.Init) !void {
 fn renderUI(terminal: *tui.Terminal(Model, EventDescription)) !*tui.UIElement {
     const allocator = terminal.renderAlloc;
 
-    var input = try tui.Input.builder(allocator, terminal)
-        .id("test-id")
-        .focused(true)
-        .placeholder("Type something")
-        .value(terminal.model.text.items)
+    var text = try tui.Text.fromConstText(allocator, "this is a very long line of text that is the line of text that is long and wrapped");
+    _ = text.styles.wordWrap(true).border(.Rounded);
+    const layout = try tui.Layout.builder(allocator, .Horizontal)
+        .elements(&.{text})
+        .constraints(&.{.{ .width = .{ .Max = 20 } }})
         .build();
-    _ = input.styles.border(.Rounded);
+    _ = terminal.setNextRenderCursorInfo(.{
+        .style = .IBeam,
+        .onElement = text,
+        .position = .{ .Value = 5 },
+    });
 
-    return input;
+    return layout;
 }
 
 fn stdinHandler(terminal: *tui.Terminal(Model, EventDescription), data: []const u8) !void {

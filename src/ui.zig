@@ -215,6 +215,7 @@ const TextRenderUtil = struct {
 
 pub fn setElementDimensions(
     allocator: Allocator,
+    context: *RenderContext(anyopaque, void),
     element: *UIElement,
     sizeConstraint: utils.Size,
     constraint: Constraint,
@@ -247,6 +248,16 @@ pub fn setElementDimensions(
             );
             try textRenderer.render(allocator, text.data);
 
+            if (context.terminal.nextRenderCursorInfo) |info| {
+                if (info.position == .After) {
+                    const textForCursor = " ";
+                    const utf8View = try std.unicode.Utf8View.init(textForCursor);
+                    var iter = utf8View.iterator();
+
+                    _ = try textRenderer.renderForSlice(allocator, textForCursor, &iter);
+                }
+            }
+
             text.renderedData = textRenderer.lines.items;
             elInfo.width = textRenderer.width + preAdjust.width + postAdjust.width;
             elInfo.height = textRenderer.height + preAdjust.height + postAdjust.height;
@@ -261,6 +272,7 @@ pub fn setElementDimensions(
                 .Horizontal => try setLayoutDimensions(
                     allocator,
                     .Horizontal,
+                    context,
                     element,
                     &elInfo,
                     layout,
@@ -273,6 +285,7 @@ pub fn setElementDimensions(
                 .Vertical => try setLayoutDimensions(
                     allocator,
                     .Vertical,
+                    context,
                     element,
                     &elInfo,
                     layout,
@@ -462,6 +475,7 @@ fn adjustElInfoDimensions(
 fn setLayoutDimensions(
     allocator: Allocator,
     comptime layoutType: components.LayoutTypes,
+    context: *RenderContext(anyopaque, void),
     element: *UIElement,
     elInfo: *ElementLayoutInfo,
     layout: components.Layout,
@@ -522,6 +536,7 @@ fn setLayoutDimensions(
         };
         try setElementDimensions(
             allocator,
+            context,
             el,
             newSizeConstraint,
             newElConstraint,
@@ -588,6 +603,7 @@ fn setLayoutDimensions(
         const el = elOrNull orelse continue;
         try setElementDimensions(
             allocator,
+            context,
             el,
             absoluteSizeConstraint,
             constraint,
